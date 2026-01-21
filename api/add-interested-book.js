@@ -3,6 +3,11 @@
 
 const { createClient } = require('@supabase/supabase-js');
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
+const DEBUG_RECO = process.env.DEBUG_RECO === '1';
+
+function debugLog(...args) {
+  if (DEBUG_RECO) console.log(...args);
+}
 const ALADIN_API_KEY = process.env.ALADIN_API_KEY || 'ttbcasey862231001';
 
 // Supabase 클라이언트 초기화
@@ -68,6 +73,33 @@ async function getBookFromAladin(isbn) {
 }
 
 // OpenAI로 AI 가이드 생성
+function parseJsonFromText(text) {
+  const jsonMatch = text.match(/\{[\s\S]*\}/);
+  if (!jsonMatch) return null;
+  try {
+    return JSON.parse(jsonMatch[0]);
+  } catch (e) {
+    return null;
+  }
+}
+
+function extractResponseText(data) {
+  if (typeof data.output_text === 'string' && data.output_text.trim()) {
+    return data.output_text.trim();
+  }
+  if (Array.isArray(data.output)) {
+    for (const item of data.output) {
+      if (!item.content) continue;
+      for (const c of item.content) {
+        if (c.type === 'output_text' && typeof c.text === 'string') {
+          return c.text.trim();
+        }
+      }
+    }
+  }
+  return '';
+}
+
 async function generateAIGuide(bookInfo) {
   const prompt = `다음 어린이 책에 대한 정보를 분석하여 JSON 형식으로 답변해주세요.
 
@@ -85,33 +117,51 @@ async function generateAIGuide(bookInfo) {
   "activities": "책과 연계한 놀이 활동 제안"
 }`;
 
-  const response = await fetch('https://api.openai.com/v1/chat/completions', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${OPENAI_API_KEY}`
+  const payload = {
+    model: 'gpt-5-mini',
+    input: [{ role: 'user', content: prompt }],
+    text: {
+      format: { type: 'text' },
+      verbosity: 'low',
     },
-    body: JSON.stringify({
-      model: 'gpt-5-mini',
-      max_tokens: 1024,
-      temperature: 0.3,
-      messages: [{
-        role: 'user',
-        content: prompt
-      }]
-    })
-  });
+    reasoning: { effort: 'low' },
+    max_output_tokens: 600
+  };
 
-  const data = await response.json();
-  const text = data.choices?.[0]?.message?.content || '';
-  
-  // JSON 추출
-  const jsonMatch = text.match(/\{[\s\S]*\}/);
-  if (!jsonMatch) {
-    throw new Error('AI 응답 파싱 실패');
+  for (let attempt = 1; attempt <= 2; attempt += 1) {
+    try {
+      const response = await fetch('https://api.openai.com/v1/responses', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${OPENAI_API_KEY}`
+        },
+        body: JSON.stringify(payload)
+      });
+
+      if (!response.ok) {
+        const errText = await response.text();
+        debugLog('[WHY] add-interested-book ai non-200:', response.status, errText);
+        continue;
+      }
+
+      const data = await response.json();
+      const text = extractResponseText(data);
+      const parsed = parseJsonFromText(text);
+      if (parsed) return parsed;
+
+      debugLog('[WHY] add-interested-book ai parse miss (attempt', attempt + '):', text.slice(0, 200));
+      // 2번째 시도 전에는 출력 형식을 더 강하게 유도
+      payload.input = [{
+        role: 'user',
+        content: `${prompt}\n\n반드시 JSON만 출력하고 다른 설명은 넣지 마세요.`
+      }];
+    } catch (e) {
+      debugLog('[WHY] add-interested-book ai exception:', e?.message || e);
+    }
   }
-  
-  return JSON.parse(jsonMatch[0]);
+
+  return { themes: [], ageRange: '', parentGuide: '', activities: '' };
 }
 
 // Books 테이블에 책 추가

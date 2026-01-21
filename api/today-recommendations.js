@@ -3,6 +3,11 @@
 
 const { createClient } = require('@supabase/supabase-js');
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
+const DEBUG_RECO = process.env.DEBUG_RECO === '1';
+
+function debugLog(...args) {
+  if (DEBUG_RECO) console.log(...args);
+}
 
 // Supabase 클라이언트 초기화
 function getSupabaseClient() {
@@ -14,6 +19,16 @@ function getSupabaseClient() {
   }
 
   return createClient(supabaseUrl, supabaseKey);
+}
+
+function parseExplicitInterests(raw) {
+  if (!raw) return [];
+  if (Array.isArray(raw)) raw = raw.join(',');
+  return String(raw)
+    .split(',')
+    .map(s => s.trim().toLowerCase())
+    .filter(Boolean)
+    .slice(0, 8);
 }
 
 function clamp(n, min, max) {
@@ -69,6 +84,90 @@ function getSafeRatioByBooksPerDay(booksPerDay) {
   if (booksPerDay <= 3) return 0.75; // 75/25
   if (booksPerDay <= 5) return 0.70; // 70/30
   return 0.60; // 60/40
+}
+
+// ============================================
+// (A/B/C) 관심사/가중치/관심표시(Interested) 보강 설정
+// ============================================
+const THEME_TOP_K = 6;            // A: "관심사"로 유지할 상위 테마 개수
+const GENERIC_THEME_WEIGHT = 0.7; // B: 너무 흔한 테마 down-weight
+const INTEREST_BONUS = 6;         // C: 관심 표시 책 bonus (0~10 추천)
+
+const GENERIC_THEMES = new Set([
+  '이웃', '가족', '일상', '친구', '사랑', '배려', '공동체', '우정', '성장', '마음', '관계',
+  '자연', '동물', '놀이', '유머'
+]);
+
+function normalizeTheme(t) {
+  return (t || '').trim().toLowerCase();
+}
+
+// B: 전체(보유) 책 기준 테마 통계(df) → IDF 가중치 계산용
+function buildThemeStats(allBooks) {
+  const df = new Map();
+  const N = (allBooks || []).length || 1;
+
+  for (const b of (allBooks || [])) {
+    const themes = (b?.fields?.['테마'] || '')
+      .split(',')
+      .map(normalizeTheme)
+      .filter(Boolean);
+
+    const uniq = new Set(themes);
+    for (const t of uniq) df.set(t, (df.get(t) || 0) + 1);
+  }
+  return { N, df };
+}
+
+// B: 범용 테마 다운 + 희소성(IDF) 업
+function themeWeight(theme, themeStats) {
+  const t = normalizeTheme(theme);
+  if (!t) return 1;
+
+  const N = themeStats?.N || 1;
+  const df = themeStats?.df?.get(t) || 0;
+
+  // log((N+1)/(df+1))+1 => 1 이상
+  const idf = Math.log((N + 1) / (df + 1)) + 1;
+  const generic = GENERIC_THEMES.has(t) ? GENERIC_THEME_WEIGHT : 1;
+
+  const w = idf * generic;
+  return Math.max(0.6, Math.min(w, 2.2));
+}
+
+// A: 상위 K개 테마만 유지
+function keepTopKThemes(themePreferences, k = THEME_TOP_K) {
+  const entries = Object.entries(themePreferences || {});
+  if (entries.length <= k) return themePreferences || {};
+
+  entries.sort((a, b) => (b[1] || 0) - (a[1] || 0));
+  const top = entries.slice(0, k);
+
+  const out = {};
+  for (const [t, v] of top) out[t] = v;
+  return out;
+}
+
+// C: 관심 표시 book 판정 (DB 타입 섞여도 처리)
+function isInterestedValue(v) {
+  if (v === true) return true;
+  if (typeof v === 'number') return v === 1;
+  if (typeof v === 'string') {
+    const s = v.trim().toLowerCase();
+    return s === 'true' || s === 'y' || s === 'yes' || s === '1' || s === '관심' || s === 'o';
+  }
+  return false;
+}
+
+function parseThemes(raw) {
+  return String(raw || '')
+    .replace(/\r?\n/g, ',')
+    .replace(/[|/]/g, ',')
+    .replace(/[:：]/g, ',')
+    .split(',')
+    .map(s => s.trim().toLowerCase())
+    .filter(Boolean)
+    .filter(t => t.length <= 20);
 }
 
 // ============================================
@@ -223,6 +322,9 @@ function analyzeChildProfile(readingLogs, allBooks) {
     themePreferences[theme] = data.scores.reduce((sum, s) => sum + s, 0) / data.scores.length;
   });
 
+  // ✅ A 적용: 상위 K개만 유지
+  const topThemePreferences = keepTopKThemes(themePreferences, THEME_TOP_K);
+
   // 트리거 수집 (memoSummary에서)
   const comfortTriggers = [];
   recentLogs.forEach(log => {
@@ -244,7 +346,7 @@ function analyzeChildProfile(readingLogs, allBooks) {
     hasData: true,
     ageMonths,
     emotionSensitivity,
-    themePreferences,
+    themePreferences: topThemePreferences, // ✅ A
     engagementPatterns,
     comfortTriggers: [...new Set(comfortTriggers)] // 중복 제거
   };
@@ -253,37 +355,33 @@ function analyzeChildProfile(readingLogs, allBooks) {
 // ============================================
 // 룰 기반 점수 계산
 // ============================================
-function calculateRecommendationScore(book, childProfile, allBooks, readingLogs) {
+function calculateRecommendationScore(book, childProfile, allBooks, readingLogs, themeStats, explicitInterests) {
   const breakdown = {
     themePreference: 0,
     engagement: 0,
     comfort: 0,
     age: 0,
-    diversity: 0
+    diversity: 0,
+    interest: 0 // ✅ C
   };
 
-  const bookThemes = (book.fields['테마'] || '')
-    .split(',')
-    .map(t => t.trim().toLowerCase())
-    .filter(Boolean);
+  const bookThemes = parseThemes(book.fields['테마']);
 
-  // 1. ThemePreferenceScore (55%)
+  // 1. ThemePreferenceScore (55%) ✅ B 적용
   let themeScore = 0;
   let matchedThemes = [];
   
   bookThemes.forEach(theme => {
     const preference = childProfile.themePreferences[theme] || 0;
     if (preference > 0) {
-      themeScore += preference;
+      const w = themeWeight(theme, themeStats); // ✅ B
+      themeScore += preference * w;
       matchedThemes.push(theme);
     }
   });
 
-  // 정규화 (최대 점수를 55점으로)
-  // 데이터가 없을 때는 기본 점수 부여
   if (Object.keys(childProfile.themePreferences).length === 0) {
-    // 리딩로그가 없을 때는 연령 기반 기본 점수
-    breakdown.themePreference = 30; // 기본 점수
+    breakdown.themePreference = 30;
   } else {
     const maxThemeScore = Math.max(...Object.values(childProfile.themePreferences), 1);
     breakdown.themePreference = matchedThemes.length > 0 
@@ -296,21 +394,18 @@ function calculateRecommendationScore(book, childProfile, allBooks, readingLogs)
   const evidence = [];
 
   bookThemes.forEach(theme => {
-    // 완독 패턴
     const completedCount = childProfile.engagementPatterns.completedThemes[theme] || 0;
     if (completedCount > 0) {
       engagementScore += completedCount * 3;
       evidence.push(`${theme} 테마 완독 ${completedCount}회`);
     }
 
-    // 집중 패턴
     const focusCount = childProfile.engagementPatterns.highFocusThemes[theme] || 0;
     if (focusCount > 0) {
       engagementScore += focusCount * 2;
       evidence.push(`${theme} 테마 집중 ${focusCount}회`);
     }
 
-    // 질문 패턴 (가중치 낮게)
     const questionCount = childProfile.engagementPatterns.highQuestionThemes[theme] || 0;
     if (questionCount > 0) {
       engagementScore += questionCount * 1;
@@ -318,10 +413,8 @@ function calculateRecommendationScore(book, childProfile, allBooks, readingLogs)
     }
   });
 
-  // 정규화 (최대 점수를 25점으로)
-  // 데이터가 없을 때는 기본 점수 부여
   if (engagementScore === 0 && !childProfile.hasData) {
-    breakdown.engagement = 15; // 기본 점수
+    breakdown.engagement = 15;
   } else {
     const maxEngagement = Math.max(
       ...Object.values(childProfile.engagementPatterns.completedThemes),
@@ -332,12 +425,20 @@ function calculateRecommendationScore(book, childProfile, allBooks, readingLogs)
     breakdown.engagement = Math.min(engagementScore * 25 / (maxEngagement * 6), 25);
   }
 
-  // 3. ComfortScore (20%)
-  let comfortScore = 20; // 기본 점수
+  // 명시 관심사 boost (themePreference에만 적용)
+  if (explicitInterests && explicitInterests.length) {
+    const matchedExplicit = explicitInterests.filter(t => bookThemes.includes(t));
+    if (matchedExplicit.length) {
+      const boost = Math.min(matchedExplicit.length * 8, 16);
+      breakdown.themePreference = Math.min(55, breakdown.themePreference + boost);
+      evidence.unshift(`명시 관심사 일치: ${matchedExplicit.slice(0, 2).join(', ')}`);
+    }
+  }
 
-  // 감정 예민도가 높으면 트리거 체크
+  // 3. ComfortScore (20%)
+  let comfortScore = 20;
+
   if (childProfile.emotionSensitivity === 'high') {
-    // 트리거 키워드 체크 (간단한 키워드 매칭)
     const triggerKeywords = ['갈등', '공포', '슬픔', '이별', '무서움', '놀람', '화남'];
     const bookDescription = (book.fields['설명'] || '').toLowerCase();
     const bookTheme = (book.fields['테마'] || '').toLowerCase();
@@ -349,7 +450,6 @@ function calculateRecommendationScore(book, childProfile, allBooks, readingLogs)
       }
     });
 
-    // memoSummary의 트리거와 매칭
     const bookThemesLower = bookThemes.join(' ');
     childProfile.comfortTriggers.forEach(trigger => {
       if (bookThemesLower.includes(trigger) || bookDescription.includes(trigger)) {
@@ -358,14 +458,11 @@ function calculateRecommendationScore(book, childProfile, allBooks, readingLogs)
     });
 
     if (hasTrigger) {
-      comfortScore -= 10; // 페널티
+      comfortScore -= 10;
     } else {
-      // 안정적인 테마 가산
       const safeThemes = ['일상', '유머', '가족', '친구', '동물', '자연'];
       const hasSafeTheme = bookThemes.some(theme => safeThemes.some(safe => theme.includes(safe)));
-      if (hasSafeTheme) {
-        comfortScore += 5;
-      }
+      if (hasSafeTheme) comfortScore += 5;
     }
   }
 
@@ -380,15 +477,10 @@ function calculateRecommendationScore(book, childProfile, allBooks, readingLogs)
     const bookMinAge = parseInt(ageMatch[1]);
     const bookMaxAge = parseInt(ageMatch[2]);
     
-    if (childAgeYears < bookMinAge) {
-      breakdown.age = -5; // 너무 어려움
-    } else if (childAgeYears > bookMaxAge + 2) {
-      breakdown.age = -10; // 너무 쉬움 (상향 과다)
-    } else if (childAgeYears >= bookMinAge && childAgeYears <= bookMaxAge) {
-      breakdown.age = 0; // 적절함
-    } else {
-      breakdown.age = -2; // 약간 벗어남
-    }
+    if (childAgeYears < bookMinAge) breakdown.age = -5;
+    else if (childAgeYears > bookMaxAge + 2) breakdown.age = -10;
+    else if (childAgeYears >= bookMinAge && childAgeYears <= bookMaxAge) breakdown.age = 0;
+    else breakdown.age = -2;
   } else {
     breakdown.age = 0;
   }
@@ -409,26 +501,28 @@ function calculateRecommendationScore(book, childProfile, allBooks, readingLogs)
   const hasRecentPublisher = recentPublishers.includes(publisher);
   const hasRecentTheme = bookThemes.some(theme => recentThemes.includes(theme));
 
-  if (!hasRecentPublisher && !hasRecentTheme) {
-    breakdown.diversity = 3; // 다양성 보너스
-  } else if (!hasRecentPublisher || !hasRecentTheme) {
-    breakdown.diversity = 1;
-  } else {
-    breakdown.diversity = -1; // 다양성 페널티
+  if (!hasRecentPublisher && !hasRecentTheme) breakdown.diversity = 3;
+  else if (!hasRecentPublisher || !hasRecentTheme) breakdown.diversity = 1;
+  else breakdown.diversity = -1;
+
+  // ✅ C: 관심 표시 보너스 (today는 DB 책이라 바로 필드로 판정)
+  if (isInterestedValue(book.fields['관심'])) {
+    breakdown.interest = INTEREST_BONUS;
   }
 
-  // 최종 점수
   const finalScore = 
     breakdown.themePreference +
     breakdown.engagement +
     breakdown.comfort +
     breakdown.age +
-    breakdown.diversity;
+    breakdown.diversity +
+    breakdown.interest;
 
   return {
     finalScore,
     breakdown,
-    evidence: evidence.slice(0, 3) // 최대 3개 증거
+    evidence: evidence.slice(0, 3),
+    _themes: bookThemes // ✅ 옵션1 explore에서 재사용
   };
 }
 
@@ -460,12 +554,21 @@ function pickUniqueHooksFromText(text, limit = 2) {
     .slice(0, limit);
 }
 
-function buildRuleReasons(book, scoreData, childProfile) {
+function buildRuleReasons(book, scoreData, childProfile, explicitInterests) {
   const reasons = [];
   const matchedThemes = (book.fields['테마'] || '')
     .split(',')
     .map(t => t.trim())
     .filter(Boolean);
+
+  const bookThemesLower = (book.fields['테마'] || '')
+    .split(',')
+    .map(t => t.trim().toLowerCase())
+    .filter(Boolean);
+  const matchedExplicit = (explicitInterests || []).filter(t => bookThemesLower.includes(t));
+  if (matchedExplicit.length) {
+    reasons.push(`요즘 관심사로 선택한 '${matchedExplicit.slice(0, 2).join(', ')}'와 잘 맞아요`);
+  }
 
   // 1) 테마 근거
   if (scoreData.breakdown.themePreference >= 30 && matchedThemes.length > 0) {
@@ -548,17 +651,17 @@ function shuffleArray(list) {
 // AI 기반 추천 이유 생성 (하이브리드 버전)
 // - 룰 기반 "근거"를 만들고, AI는 그 근거를 자연스럽게 풀어쓰기만 함
 // ============================================
-async function generateRecommendationReason(book, scoreData, childProfile) {
+async function generateRecommendationReason(book, scoreData, childProfile, explicitInterests) {
   if (!OPENAI_API_KEY) {
-    return { text: generateRuleBasedReason(book, scoreData, childProfile), source: 'rule_no_key' };
+    return { text: generateRuleBasedReason(book, scoreData, childProfile, explicitInterests), source: 'rule_no_key' };
   }
 
   // 1) 룰 근거(뼈대) 만들기
-  const ruleReasons = buildRuleReasons(book, scoreData, childProfile);
+  const ruleReasons = buildRuleReasons(book, scoreData, childProfile, explicitInterests);
 
   // 근거가 너무 빈약하면 그냥 룰 기반 반환
   if (!ruleReasons.length) {
-    return { text: generateRuleBasedReason(book, scoreData, childProfile), source: 'rule_empty_reasons' };
+    return { text: generateRuleBasedReason(book, scoreData, childProfile, explicitInterests), source: 'rule_empty_reasons' };
   }
 
   // 2) 책 설명에서 “이 책만의 포인트”를 최소로 뽑아 AI에 제공(추측 금지)
@@ -599,7 +702,7 @@ async function generateRecommendationReason(book, scoreData, childProfile) {
       },
     };
 
-    console.log('[WHY] text.format typeof =', typeof payload.text.format, payload.text.format);
+    debugLog('[WHY] text.format typeof =', typeof payload.text.format, payload.text.format);
 
     const response = await fetch('https://api.openai.com/v1/responses', {
       method: 'POST',
@@ -619,18 +722,18 @@ async function generateRecommendationReason(book, scoreData, childProfile) {
           Array.isArray(item.content) ? item.content.map((c) => c.type) : []
         )
       : [];
-    console.log('[WHY] response status:', data.status, 'incomplete_reason:', data?.incomplete_details?.reason);
-    console.log('[WHY] output types:', outputTypes, 'content types:', contentTypes);
+    debugLog('[WHY] response status:', data.status, 'incomplete_reason:', data?.incomplete_details?.reason);
+    debugLog('[WHY] output types:', outputTypes, 'content types:', contentTypes);
     if (!response.ok) {
-      console.log('[WHY] responses non-200:', response.status, JSON.stringify(data));
-      return { text: generateRuleBasedReason(book, scoreData, childProfile), source: `rule_openai_${response.status}` };
+      debugLog('[WHY] responses non-200:', response.status, JSON.stringify(data));
+      return { text: generateRuleBasedReason(book, scoreData, childProfile, explicitInterests), source: `rule_openai_${response.status}` };
     }
 
     const text = extractResponseText(data);
 
     if (!text) {
-      console.log('[WHY] empty ai output', JSON.stringify(data));
-      return { text: generateRuleBasedReason(book, scoreData, childProfile), source: 'rule_empty_ai' };
+      debugLog('[WHY] empty ai output', JSON.stringify(data));
+      return { text: generateRuleBasedReason(book, scoreData, childProfile, explicitInterests), source: 'rule_empty_ai' };
     }
 
     // 4) 안전장치: 너무 짧거나 금지 표현 포함 시 fallback
@@ -639,21 +742,29 @@ async function generateRecommendationReason(book, scoreData, childProfile) {
     const hasBanned = banned.some((p) => text.includes(p));
 
     if (tooShort || hasBanned) {
-      return { text: generateRuleBasedReason(book, scoreData, childProfile), source: 'rule_guard' };
+      return { text: generateRuleBasedReason(book, scoreData, childProfile, explicitInterests), source: 'rule_guard' };
     }
 
     return { text, source: 'ai' };
   } catch (error) {
-    console.log('[WHY] openai exception:', error?.message || error);
-    return { text: generateRuleBasedReason(book, scoreData, childProfile), source: 'rule_exception' };
+    debugLog('[WHY] openai exception:', error?.message || error);
+    return { text: generateRuleBasedReason(book, scoreData, childProfile, explicitInterests), source: 'rule_exception' };
   }
 
-  return { text: generateRuleBasedReason(book, scoreData, childProfile), source: 'rule_fallback' };
+  return { text: generateRuleBasedReason(book, scoreData, childProfile, explicitInterests), source: 'rule_fallback' };
 }
 
 // 룰 기반 추천 이유 (AI 실패 시 fallback)
-function generateRuleBasedReason(book, scoreData, childProfile) {
+function generateRuleBasedReason(book, scoreData, childProfile, explicitInterests) {
   const reasons = [];
+  const bookThemesLower = (book.fields['테마'] || '')
+    .split(',')
+    .map(t => t.trim().toLowerCase())
+    .filter(Boolean);
+  const matchedExplicit = (explicitInterests || []).filter(t => bookThemesLower.includes(t));
+  if (matchedExplicit.length) {
+    reasons.push(`요즘 관심사로 선택한 '${matchedExplicit.slice(0, 2).join(', ')}'와 잘 맞아요`);
+  }
 
   if (scoreData.breakdown.themePreference > 30) {
     reasons.push('좋아하는 테마와 일치합니다');
@@ -683,6 +794,14 @@ function generateRuleBasedReason(book, scoreData, childProfile) {
 // ============================================
 module.exports = async (req, res) => {
   console.log('[API HIT] today-recommendations', req.url);
+  // === DEBUG: explicit interests from query ===
+  const explicitInterests = (req.query.interests || '')
+    .split(',')
+    .map(v => v.trim())
+    .filter(Boolean);
+
+  debugLog('[INT] explicitInterests =', explicitInterests);
+  
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
@@ -753,6 +872,9 @@ module.exports = async (req, res) => {
       }
     }));
 
+    // ✅ B: 내 DB 기준 테마 통계
+    const themeStats = buildThemeStats(allBooks);
+
     // ReadingLog 테이블 (모든 데이터 가져오기 - 페이지네이션)
     let allLogsData = [];
     from = 0;
@@ -804,6 +926,8 @@ module.exports = async (req, res) => {
       booksPerDay: resolvedBooksPerDay,
     };
 
+    const explicitInterestsNormalized = parseExplicitInterests(req.query.interests);
+
     // 4. 읽지 않은 책 필터링
     const unreadBooks = allBooks.filter(book => 
       !readingLogs.find(log => log.fields['책']?.[0] === book.id)
@@ -819,7 +943,14 @@ module.exports = async (req, res) => {
 
     // 5. 룰 기반 점수 계산
     const scoredBooks = unreadBooks.map(book => {
-      const scoreData = calculateRecommendationScore(book, childProfile, allBooks, readingLogs);
+      const scoreData = calculateRecommendationScore(
+        book,
+        childProfile,
+        allBooks,
+        readingLogs,
+        themeStats,
+        explicitInterestsNormalized
+      );
       return {
         book,
         ...scoreData
@@ -829,46 +960,96 @@ module.exports = async (req, res) => {
     // 6. 점수 순 정렬
     scoredBooks.sort((a, b) => b.finalScore - a.finalScore);
 
-    // 7. 다양성 보정 (Top 10 중 70% 안전, 30% 확장)
+    // 7. 다양성 보정 (옵션 1: safe/explore 모두 "pool에서 랜덤 샘플" + refill)
     const topCount = Math.min(getTopCountByBooksPerDay(childProfile.booksPerDay), scoredBooks.length);
     const safeRatio = getSafeRatioByBooksPerDay(childProfile.booksPerDay);
     const safeCount = Math.max(1, Math.floor(topCount * safeRatio));
     const exploreCount = Math.max(0, topCount - safeCount);
 
-    const safeBooks = scoredBooks.slice(0, safeCount);
-    
-    const booksPerDay = childProfile.booksPerDay || 3;
+    // ✅ SAFE: 상위 SAFE_POOL_SIZE에서 랜덤 샘플링
+    const SAFE_POOL_SIZE = 30;
+    const safePool = scoredBooks.slice(0, SAFE_POOL_SIZE);
+    const safeBooks = shuffleArray(safePool).slice(0, safeCount);
+
+    debugLog('[TODAY] safe sample:', {
+      safePoolSize: safePool.length,
+      safeCount,
+      picked: safeBooks.length
+    });
+
+    // exploreCandidates는 safeCount 기준으로 뒤에서(원래 점수순) 가져오되,
+    // explore의 "새테마"는 safeBooks의 테마와 비교
     const exploreCandidates = scoredBooks.slice(safeCount);
 
-    // 안전 리스트에서 본 테마
     const safeThemes = new Set();
     safeBooks.forEach(item => {
-      const themes = (item.book.fields['테마'] || '').split(',').map(t => t.trim().toLowerCase()).filter(Boolean);
+    const themes = item._themes || parseThemes(item.book.fields['테마']);
       themes.forEach(t => safeThemes.add(t));
     });
 
-    // 후보들에 "새 테마 개수"를 계산해서 정렬
+    debugLog('[TODAY] safeThemes size=', safeThemes.size, 'sample=', [...safeThemes].slice(0, 10));
+
+    // rankedExplore: newThemeCount 계산 후
+    // ✅ 필터 제거(0도 포함) + ✅ 항상 newThemeCount 우선 정렬
     const rankedExplore = exploreCandidates
       .map(item => {
-        const themes = (item.book.fields['테마'] || '').split(',').map(t => t.trim().toLowerCase()).filter(Boolean);
+    const themes = item._themes || parseThemes(item.book.fields['테마']);
+
         const newThemeCount = themes.filter(t => t && !safeThemes.has(t)).length;
         return { ...item, _newThemeCount: newThemeCount };
       })
-      .filter(item => item._newThemeCount > 0)
       .sort((a, b) => {
-        // booksPerDay가 높을수록 새 테마 많은 책을 더 선호
-        if (booksPerDay >= 6) {
-          if (b._newThemeCount !== a._newThemeCount) return b._newThemeCount - a._newThemeCount;
-        }
+        if (b._newThemeCount !== a._newThemeCount) return b._newThemeCount - a._newThemeCount;
         return b.finalScore - a.finalScore;
       });
 
-    const exploreBooks = rankedExplore.slice(0, exploreCount);
+    debugLog(
+      '[TODAY] rankedExplore size:',
+      rankedExplore.length,
+      'newThemeCount top10:',
+      rankedExplore.slice(0, 10).map(x => x._newThemeCount).join(',')
+    );
+
+    // ✅ EXPLORE: 상위 EXPLORE_POOL_SIZE에서 랜덤 샘플링
+    const EXPLORE_POOL_SIZE = 30;
+    const explorePool = rankedExplore.slice(0, EXPLORE_POOL_SIZE);
+
+    let exploreBooks = shuffleArray(explorePool).slice(0, exploreCount);
+
+    debugLog('[TODAY] explore sample:', {
+      rankedExplore: rankedExplore.length,
+      explorePoolSize: explorePool.length,
+      exploreCount,
+      picked: exploreBooks.length
+    });
+
+    // safeBooks와 중복 제거 (id 기준)
+    const safeIds = new Set(safeBooks.map(x => x.book.id).filter(Boolean));
+    exploreBooks = exploreBooks.filter(x => x.book?.id && !safeIds.has(x.book.id));
+
+    // 부족하면 explorePool에서 refill
+    if (exploreBooks.length < exploreCount) {
+      const need = exploreCount - exploreBooks.length;
+      const refill = shuffleArray(explorePool)
+        .filter(x => x.book?.id && !safeIds.has(x.book.id))
+        .slice(0, need);
+
+      exploreBooks = exploreBooks.concat(refill);
+    }
 
     let finalList = [...safeBooks, ...exploreBooks].slice(0, topCount);
-    if (forceRefresh) {
-      finalList = shuffleArray(finalList);
-    }
+    if (forceRefresh) finalList = shuffleArray(finalList);
+
+    debugLog('[TODAY] split:', {
+      safe: safeBooks.length,
+      explore: exploreBooks.length,
+      safeTop: safeBooks.slice(0, 3).map(x => x.book.fields['제목']),
+      exploreTop: exploreBooks.slice(0, 3).map(x => x.book.fields['제목']),
+    });
+    debugLog('[TODAY] scoredBooks:', scoredBooks.length, 'topCount:', topCount, 'forceRefresh:', forceRefresh);
+    debugLog('[TODAY] finalList titles:',
+      finalList.map(x => `${x.book.fields['제목']} (${Math.round(x.finalScore * 10) / 10})`).join(' | ')
+    );
 
     // 8. AI 기반 추천 이유 생성
     const booksWithReason = await Promise.all(
@@ -876,9 +1057,9 @@ module.exports = async (req, res) => {
         let why;
         
         if (childProfile.hasData) {
-          why = await generateRecommendationReason(item.book, item, childProfile);
+          why = await generateRecommendationReason(item.book, item, childProfile, explicitInterestsNormalized);
         } else {
-          why = { text: generateRuleBasedReason(item.book, item, childProfile), source: 'rule_no_data' };
+          why = { text: generateRuleBasedReason(item.book, item, childProfile, explicitInterestsNormalized), source: 'rule_no_data' };
         }
 
         return {
@@ -897,6 +1078,7 @@ module.exports = async (req, res) => {
             comfort: Math.round(item.breakdown.comfort * 10) / 10,
             age: Math.round(item.breakdown.age * 10) / 10,
             diversity: Math.round(item.breakdown.diversity * 10) / 10,
+            interest: Math.round((item.breakdown.interest || 0) * 10) / 10, // ✅ C
             total: Math.round(item.finalScore * 10) / 10
           },
           why: why.text,
@@ -915,6 +1097,9 @@ module.exports = async (req, res) => {
         ageMonths: childProfile.ageMonths,
         emotionSensitivity: childProfile.emotionSensitivity,
         booksPerDay: childProfile.booksPerDay,
+      },
+      meta: {
+        explicitInterests: explicitInterestsNormalized
       },
       books: booksWithReason
     });

@@ -4,6 +4,11 @@
 const { createClient } = require('@supabase/supabase-js');
 const ALADIN_API_KEY = process.env.ALADIN_API_KEY || 'ttbcasey862231001';
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
+const DEBUG_RECO = process.env.DEBUG_RECO === '1';
+
+function debugLog(...args) {
+  if (DEBUG_RECO) console.log(...args);
+}
 
 // Supabase 클라이언트 초기화
 function getSupabaseClient() {
@@ -15,6 +20,20 @@ function getSupabaseClient() {
   }
 
   return createClient(supabaseUrl, supabaseKey);
+}
+
+function parseExplicitInterests(raw) {
+  if (!raw) return [];
+  if (Array.isArray(raw)) raw = raw.join(',');
+  return String(raw)
+    .split(',')
+    .map(s => s.trim().toLowerCase())
+    .filter(Boolean)
+    .slice(0, 8);
+}
+
+function normIsbn(x) {
+  return String(x || '').replace(/[^0-9X]/gi, '').trim();
 }
 
 function clamp(n, min, max) {
@@ -70,6 +89,52 @@ function getSafeRatioByBooksPerDay(booksPerDay) {
   if (booksPerDay <= 3) return 0.75; // 75/25
   if (booksPerDay <= 5) return 0.70; // 70/30
   return 0.60; // 60/40
+}
+
+async function fetchAladinPool({ queryType, categoryId, pages = 4, maxResults = 50 }) {
+  const items = [];
+  const perPage = Math.min(Math.max(Number(maxResults) || 50, 1), 50);
+  const totalPages = Math.min(Math.max(Number(pages) || 4, 1), 20);
+
+  for (let start = 1; start <= totalPages; start++) {
+    const url =
+      `http://www.aladin.co.kr/ttb/api/ItemList.aspx` +
+      `?ttbkey=${ALADIN_API_KEY}` +
+      `&QueryType=${encodeURIComponent(queryType)}` +
+      `&SearchTarget=Book` +
+      `&CategoryId=${categoryId}` +
+      `&Start=${start}` +
+      `&MaxResults=${perPage}` +
+      `&output=js&Version=20131101&Cover=Big`;
+
+    const r = await fetch(url);
+    if (r.ok) {
+      const data = await r.json();
+      if (data?.item) items.push(...(Array.isArray(data.item) ? data.item : [data.item]));
+    }
+    await new Promise(res => setTimeout(res, 400));
+  }
+
+  const unique = [];
+  const seen = new Set();
+  for (const b of items) {
+    const isbn = b.isbn13 || b.isbn;
+    const key = normIsbn(isbn);
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    unique.push(b);
+  }
+  return unique;
+}
+
+async function fetchExcludedIsbns(supabase, userId) {
+  const { data, error } = await supabase
+    .from('excluded_aladin_isbns')
+    .select('isbn13')
+    .eq('user_id', userId);
+
+  if (error) throw new Error(`Supabase excluded isbns error: ${error.message}`);
+  return new Set((data || []).map(r => normIsbn(r.isbn13)).filter(Boolean));
 }
 
 // 유아 4~7세 카테고리
@@ -216,7 +281,7 @@ function analyzeChildProfile(readingLogs, allBooks) {
         return null;
       })
       .filter(Boolean);
-
+    
     if (ageRanges.length > 0) {
       const avgMin = ageRanges.reduce((sum, r) => sum + r.min, 0) / ageRanges.length;
       const avgMax = ageRanges.reduce((sum, r) => sum + r.max, 0) / ageRanges.length;
@@ -225,13 +290,13 @@ function analyzeChildProfile(readingLogs, allBooks) {
   }
 
   const reactions = recentLogs.map(log => log.fields['아이반응']).filter(r => r);
-
+  
   const emotionSensitivity =
     reactions.includes('😰') || reactions.includes('😢')
-      ? 'high'
-      : reactions.includes('😍') || reactions.includes('😊')
-        ? 'low'
-        : 'normal';
+    ? 'high' 
+    : reactions.includes('😍') || reactions.includes('😊')
+    ? 'low'
+    : 'normal';
 
   const themePreferences = {};
   const engagementPatterns = {
@@ -243,7 +308,7 @@ function analyzeChildProfile(readingLogs, allBooks) {
   recentLogs.forEach(log => {
     const logWithDate = logsWithDates.find(l => l.log === log);
     const daysAgo = logWithDate?.daysAgo ?? null;
-
+    
     const book = allBooks.find(b => b.id === log.fields['책']?.[0]);
     if (!book || !book.fields['테마']) return;
 
@@ -274,7 +339,7 @@ function analyzeChildProfile(readingLogs, allBooks) {
       if (!themePreferences[theme]) {
         themePreferences[theme] = { scores: [], count: 0 };
       }
-
+      
       const themeScore = (normalizedRating * 0.6 + immersionWeight * 0.4) * recencyWeight;
       themePreferences[theme].scores.push(themeScore);
       themePreferences[theme].count += 1;
@@ -329,12 +394,12 @@ function analyzeChildProfile(readingLogs, allBooks) {
 // ============================================
 function extractThemesFromAladinBook(aladinBook, airtableBooks) {
   const rawIsbn = aladinBook?.isbn13 || aladinBook?.isbn || '';
-  const isbn = String(rawIsbn).replace(/[^0-9X]/gi, '').trim();
+  const isbn = normIsbn(rawIsbn);
 
   // 1) DB(=airtableBooks 변환본)에서 ISBN 매칭 → 테마 우선
   if (isbn) {
     const matched = airtableBooks.find((b) => {
-      const dbIsbn = String(b?.fields?.['ISBN'] || '').replace(/[^0-9X]/gi, '').trim();
+      const dbIsbn = normIsbn(b?.fields?.['ISBN'] || b?.fields?.['ISBN13']);
       return dbIsbn && dbIsbn === isbn;
     });
 
@@ -351,7 +416,7 @@ function extractThemesFromAladinBook(aladinBook, airtableBooks) {
   // 2) fallback: 제목/설명 기반 키워드 테마 추출(지금 로직을 한 곳으로 모음)
   const title = (aladinBook?.title || '').toLowerCase();
   const description = (aladinBook?.description || '').toLowerCase();
-  const fullText = `${title} ${description}`;
+    const fullText = `${title} ${description}`;
 
   // ※ 필요하면 여기 키워드만 계속 확장하면 됨
   const themeKeywords = {
@@ -373,25 +438,16 @@ function extractThemesFromAladinBook(aladinBook, airtableBooks) {
 }
 
 // ============================================
-// 하드 필터링
+// 하드 필터링 (비활성화)
 // ============================================
-function hardFilterBooks(books, childProfile) {
-  return books.filter(book => {
-    const title = (book.title || '').toLowerCase();
-    const description = (book.description || '').toLowerCase();
-    const fullText = `${title} ${description}`;
-
-    for (const keyword of EXCLUDED_KEYWORDS) {
-      if (fullText.includes(keyword.toLowerCase())) return false;
-    }
-    return true;
-  });
+function hardFilterBooks(books) {
+  return books;
 }
 
 // ============================================
 // 룰 기반 점수 계산 (알라딘 API 응답용) + A/B/C 적용
 // ============================================
-function calculateRecommendationScore(book, childProfile, airtableBooks, themeStats) {
+function calculateRecommendationScore(book, childProfile, airtableBooks, themeStats, explicitInterests) {
   const breakdown = {
     themePreference: 0,
     engagement: 0,
@@ -406,16 +462,15 @@ function calculateRecommendationScore(book, childProfile, airtableBooks, themeSt
 
   // 관심(관심) 확인용 DB 매칭
   const isbn = book.isbn13 || book.isbn;
-  const matchedDbBook = airtableBooks.find(b =>
-    b.fields['ISBN'] === isbn ||
-    b.fields['ISBN13'] === isbn ||
-    b.fields['ISBN-13'] === isbn
-  );
+  const matchedDbBook = airtableBooks.find(b => {
+    const dbIsbn = normIsbn(b?.fields?.['ISBN'] || b?.fields?.['ISBN13'] || b?.fields?.['ISBN-13']);
+    return dbIsbn && dbIsbn === normIsbn(isbn);
+  });
 
   // 1. ThemePreferenceScore (55%) ✅ B 적용
   let themeScore = 0;
   let matchedThemes = [];
-
+  
   bookThemes.forEach(theme => {
     const preference = childProfile.themePreferences[theme] || 0;
     if (preference > 0) {
@@ -431,8 +486,8 @@ function calculateRecommendationScore(book, childProfile, airtableBooks, themeSt
     const maxThemeScore = Math.max(...Object.values(childProfile.themePreferences), 1);
     breakdown.themePreference =
       matchedThemes.length > 0
-        ? (themeScore / matchedThemes.length) * 55 / maxThemeScore
-        : 0;
+      ? (themeScore / matchedThemes.length) * 55 / maxThemeScore
+      : 0;
   }
 
   // 2. EngagementScore (25%)
@@ -469,6 +524,16 @@ function calculateRecommendationScore(book, childProfile, airtableBooks, themeSt
     breakdown.engagement = Math.min(engagementScore * 25 / (maxEngagement * 6), 25);
   }
 
+  // 명시 관심사 boost (themePreference에만 적용)
+  if (explicitInterests && explicitInterests.length) {
+    const matchedExplicit = explicitInterests.filter(t => bookThemes.includes(t));
+    if (matchedExplicit.length) {
+      const boost = Math.min(matchedExplicit.length * 8, 16);
+      breakdown.themePreference = Math.min(55, breakdown.themePreference + boost);
+      evidence.unshift(`명시 관심사 일치: ${matchedExplicit.slice(0, 2).join(', ')}`);
+    }
+  }
+
   // 3. ComfortScore (20%)
   let comfortScore = 20;
 
@@ -476,7 +541,7 @@ function calculateRecommendationScore(book, childProfile, airtableBooks, themeSt
     const triggerKeywords = ['갈등', '공포', '슬픔', '이별', '무서움', '놀람', '화남'];
     const bookDescription = (book.description || '').toLowerCase();
     const bookTitle = (book.title || '').toLowerCase();
-
+    
     let hasTrigger = false;
     triggerKeywords.forEach(keyword => {
       if (bookDescription.includes(keyword) || bookTitle.includes(keyword)) hasTrigger = true;
@@ -509,7 +574,7 @@ function calculateRecommendationScore(book, childProfile, airtableBooks, themeSt
     breakdown.interest = INTEREST_BONUS;
   }
 
-  const finalScore =
+  const finalScore = 
     breakdown.themePreference +
     breakdown.engagement +
     breakdown.comfort +
@@ -551,11 +616,16 @@ function pickUniqueHooksFromText(text, limit = 2) {
     .slice(0, limit);
 }
 
-function buildRuleReasons(book, scoreData, childProfile, airtableBooks) {
+function buildRuleReasons(book, scoreData, childProfile, airtableBooks, explicitInterests) {
   const reasons = [];
 
   const themes = extractThemesFromAladinBook(book, airtableBooks).themes;
   const matchedThemes = themes;
+
+  const matchedExplicit = (explicitInterests || []).filter(t => themes.includes(t));
+  if (matchedExplicit.length) {
+    reasons.push(`요즘 관심사로 선택한 '${matchedExplicit.slice(0, 2).join(', ')}'와 잘 맞아요`);
+  }
 
   if (scoreData.breakdown.themePreference >= 30 && matchedThemes.length > 0) {
     reasons.push(`아이의 선호 테마(${matchedThemes.slice(0, 2).join(', ')})와 잘 맞아요`);
@@ -626,14 +696,14 @@ function shuffleArray(list) {
 // ============================================
 // AI 기반 추천 이유 생성 (하이브리드 버전)
 // ============================================
-async function generateRecommendationReason(book, scoreData, childProfile, airtableBooks) {
+async function generateRecommendationReason(book, scoreData, childProfile, airtableBooks, explicitInterests) {
   if (!OPENAI_API_KEY) {
-    return { text: generateRuleBasedReason(book, scoreData, childProfile, airtableBooks), source: 'rule_no_key' };
+    return { text: generateRuleBasedReason(book, scoreData, childProfile, explicitInterests, airtableBooks), source: 'rule_no_key' };
   }
 
-  const ruleReasons = buildRuleReasons(book, scoreData, childProfile, airtableBooks);
+  const ruleReasons = buildRuleReasons(book, scoreData, childProfile, airtableBooks, explicitInterests);
   if (!ruleReasons.length) {
-    return { text: generateRuleBasedReason(book, scoreData, childProfile, airtableBooks), source: 'rule_empty_reasons' };
+    return { text: generateRuleBasedReason(book, scoreData, childProfile, explicitInterests, airtableBooks), source: 'rule_empty_reasons' };
   }
 
   const hooks = pickUniqueHooksFromText(book.description || '', 2);
@@ -643,7 +713,6 @@ async function generateRecommendationReason(book, scoreData, childProfile, airta
 - 제목: ${book.title}
 - 카테고리: ${book.categoryName || '정보 없음'}
 - 발행일: ${book.pubDate || '정보 없음'}
-- 관심 표시(내 DB): ${matchedDbBook && isInterestedValue(matchedDbBook.fields['관심']) ? '예' : '아니오'}
 
 [아이 정보]
 - 나이: ${Math.floor(childProfile.ageMonths / 12)}세 ${childProfile.ageMonths % 12}개월
@@ -670,7 +739,7 @@ async function generateRecommendationReason(book, scoreData, childProfile, airta
       text: { format: { type: 'text' }, verbosity: 'low' },
     };
 
-    console.log('[WHY] text.format typeof =', typeof payload.text.format, payload.text.format);
+    debugLog('[WHY] text.format typeof =', typeof payload.text.format, payload.text.format);
 
     const response = await fetch('https://api.openai.com/v1/responses', {
       method: 'POST',
@@ -687,18 +756,18 @@ async function generateRecommendationReason(book, scoreData, childProfile, airta
       ? data.output.flatMap((item) => (Array.isArray(item.content) ? item.content.map((c) => c.type) : []))
       : [];
 
-    console.log('[WHY] response status:', data.status, 'incomplete_reason:', data?.incomplete_details?.reason);
-    console.log('[WHY] output types:', outputTypes, 'content types:', contentTypes);
+    debugLog('[WHY] response status:', data.status, 'incomplete_reason:', data?.incomplete_details?.reason);
+    debugLog('[WHY] output types:', outputTypes, 'content types:', contentTypes);
 
     if (!response.ok) {
-      console.log('[WHY] responses non-200:', response.status, JSON.stringify(data));
-      return { text: generateRuleBasedReason(book, scoreData, childProfile, airtableBooks), source: `rule_openai_${response.status}` };
+      debugLog('[WHY] responses non-200:', response.status, JSON.stringify(data));
+      return { text: generateRuleBasedReason(book, scoreData, childProfile, explicitInterests, airtableBooks), source: `rule_openai_${response.status}` };
     }
 
     const text = extractResponseText(data);
     if (!text) {
-      console.log('[WHY] empty ai output', JSON.stringify(data));
-      return { text: generateRuleBasedReason(book, scoreData, childProfile, airtableBooks), source: 'rule_empty_ai' };
+      debugLog('[WHY] empty ai output', JSON.stringify(data));
+      return { text: generateRuleBasedReason(book, scoreData, childProfile, explicitInterests, airtableBooks), source: 'rule_empty_ai' };
     }
 
     const banned = ['도움이 됩니다', '성장을 돕습니다', '배울 수 있습니다'];
@@ -706,18 +775,24 @@ async function generateRecommendationReason(book, scoreData, childProfile, airta
     const hasBanned = banned.some((p) => text.includes(p));
 
     if (tooShort || hasBanned) {
-      return { text: generateRuleBasedReason(book, scoreData, childProfile, airtableBooks), source: 'rule_guard' };
+      return { text: generateRuleBasedReason(book, scoreData, childProfile, explicitInterests, airtableBooks), source: 'rule_guard' };
     }
 
     return { text, source: 'ai' };
   } catch (error) {
-    console.log('[WHY] openai exception:', error?.message || error);
-    return { text: generateRuleBasedReason(book, scoreData, childProfile, airtableBooks), source: 'rule_exception' };
+    debugLog('[WHY] openai exception:', error?.message || error);
+    return { text: generateRuleBasedReason(book, scoreData, childProfile, explicitInterests, airtableBooks), source: 'rule_exception' };
   }
 }
 
-function generateRuleBasedReason(book, scoreData, childProfile, airtableBooks) {
+function generateRuleBasedReason(book, scoreData, childProfile, explicitInterests, airtableBooks) {
   const reasons = [];
+
+  const themes = extractThemesFromAladinBook(book, airtableBooks || []).themes;
+  const matchedExplicit = (explicitInterests || []).filter(t => themes.includes(t));
+  if (matchedExplicit.length) {
+    reasons.push(`요즘 관심사로 선택한 '${matchedExplicit.slice(0, 2).join(', ')}'와 잘 맞아요`);
+  }
 
   if (scoreData.breakdown.themePreference > 30) reasons.push('최근 선호 소재와 가까워요');
   if (scoreData.breakdown.engagement > 10) reasons.push('집중/완독 반응이 좋았던 유형과 비슷해요');
@@ -737,17 +812,51 @@ module.exports = async (req, res) => {
   res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 
+  const mode = String(req.query.mode || '').toLowerCase();
   const forceRefresh = req.query.force === '1' || req.query.force === 'true';
-  res.setHeader(
-    'Cache-Control',
-    forceRefresh ? 'no-store' : 'public, s-maxage=3600, stale-while-revalidate=86400'
-  );
 
+  if (forceRefresh) {
+    res.setHeader('Cache-Control', 'no-store');
+  } else if (mode === 'pool') {
+    res.setHeader('Cache-Control', 'public, s-maxage=21600, stale-while-revalidate=86400');
+  } else {
+    res.setHeader('Cache-Control', 'public, s-maxage=1800, stale-while-revalidate=86400');
+  }
+  
   if (req.method === 'OPTIONS') {
     return res.status(200).end();
   }
 
   try {
+    if (mode === 'pool') {
+      const categoryId = req.query.categoryId || 35101;
+      const queryType = req.query.queryType || 'ItemNewAll';
+      const pages = req.query.pages || 4;
+      const maxResults = req.query.maxResults || 50;
+      const includeDesc = req.query.includeDesc === '1';
+
+      const books = await fetchAladinPool({
+        queryType,
+        categoryId,
+        pages,
+        maxResults
+      });
+
+      const payloadBooks = includeDesc
+        ? books
+        : books.map(b => {
+            const { description, ...rest } = b;
+            return rest;
+          });
+
+      return res.status(200).json({
+        success: true,
+        mode: 'pool',
+        total: payloadBooks.length,
+        books: payloadBooks
+      });
+    }
+
     const baseProfile = {
       ageMonths: req.query.ageMonths ? parseInt(req.query.ageMonths) : null,
       emotionSensitivity: req.query.emotionSensitivity || 'normal',
@@ -783,6 +892,7 @@ module.exports = async (req, res) => {
       id: book.id,
       fields: {
         'ISBN': book.isbn,
+        'ISBN13': book.isbn13,
         '제목': book.title,
         '저자': book.author,
         '출판사': book.publisher,
@@ -846,43 +956,47 @@ module.exports = async (req, res) => {
       booksPerDay: resolvedBooksPerDay,
     };
 
-    // 알라딘 신간 가져오기
-    const aladinBooks = [];
-    for (const categoryId of CATEGORY_IDS) {
-      try {
-        const url = `http://www.aladin.co.kr/ttb/api/ItemList.aspx?ttbkey=${ALADIN_API_KEY}&QueryType=ItemNewSpecial&SearchTarget=Book&CategoryId=${categoryId}&MaxResults=50&output=js&Version=20131101&Cover=Big`;
-        const response = await fetch(url);
-
-        if (response.ok) {
-          const data = await response.json();
-          if (data && data.item) {
-            if (Array.isArray(data.item)) aladinBooks.push(...data.item);
-            else aladinBooks.push(data.item);
-          }
-        }
-      } catch (error) {
-        console.error(`카테고리 ${categoryId} 조회 실패:`, error.message);
-      }
-      await new Promise(resolve => setTimeout(resolve, 1000));
+    const poolSource = String(req.query.poolSource || 'all').toLowerCase();
+    let uniqueBooks = [];
+    if (poolSource === 'special') {
+      uniqueBooks = await fetchAladinPool({
+        queryType: 'ItemNewSpecial',
+        categoryId: 35101,
+        pages: 1,
+        maxResults: 50
+      });
+            } else {
+      uniqueBooks = await fetchAladinPool({
+        queryType: 'ItemNewAll',
+        categoryId: 35101,
+        pages: 4,
+        maxResults: 50
+      });
     }
+    debugLog('[NEW] fetched from aladin:', uniqueBooks.length);
+    debugLog('[NEW] uniqueBooks:', uniqueBooks.length);
 
-    // 중복 제거
-    const uniqueBooks = [];
-    const seenISBNs = new Set();
-    for (const book of aladinBooks) {
-      const isbn = book.isbn13 || book.isbn;
-      if (!seenISBNs.has(isbn)) {
-        seenISBNs.add(isbn);
-        uniqueBooks.push(book);
-      }
-    }
+    const explicitInterests = parseExplicitInterests(req.query.interests);
+    const userId = String(req.query.userId || 'default');
+    const excludedSet = await fetchExcludedIsbns(supabase, userId);
 
-    // 하드 필터
-    const filteredBooks = hardFilterBooks(uniqueBooks, childProfile);
+    // 제외 목록 적용 (scoring 전에!)
+    const filteredBooks = uniqueBooks.filter(b => {
+      const isbn = normIsbn(b.isbn13 || b.isbn);
+      return isbn && !excludedSet.has(isbn);
+    });
+    debugLog('[NEW] excluded count:', excludedSet.size);
+    debugLog('[NEW] filteredBooks(after exclude):', filteredBooks.length);
 
     // 점수 계산 (✅ A/B/C 적용: themeStats 전달)
     const scoredBooks = filteredBooks.map(book => {
-      const scoreData = calculateRecommendationScore(book, childProfile, allBooks, themeStats);
+      const scoreData = calculateRecommendationScore(
+        book,
+        childProfile,
+        allBooks,
+        themeStats,
+        explicitInterests
+      );
       return { book, ...scoreData };
     });
 
@@ -894,49 +1008,103 @@ module.exports = async (req, res) => {
     const safeCount = Math.max(1, Math.floor(topCount * safeRatio));
     const exploreCount = Math.max(0, topCount - safeCount);
 
-    const safeBooks = scoredBooks.slice(0, safeCount);
+    const SAFE_POOL_SIZE = 30; // 안전 후보 풀 (점수 상위 30)
+    const safePool = scoredBooks.slice(0, SAFE_POOL_SIZE);
 
-    const booksPerDay = childProfile.booksPerDay || 3;
-    const exploreCandidates = scoredBooks.slice(safeCount);
+    const safeBooks = shuffleArray(safePool).slice(0, safeCount);
 
-    // 안전 리스트에서 본 테마
-    const safeThemes = new Set();
-    safeBooks.forEach((item) => {
-      const themes = item._themes || extractThemesFromAladinBook(item.book, allBooks).themes;
-      themes.forEach((t) => safeThemes.add(t));
+    debugLog('[NEW] safe sample:', {
+      safePoolSize: safePool.length,
+      safeCount,
+      picked: safeBooks.length
     });
 
-    // 후보들에 "새 테마 개수"를 계산해서 정렬
+    const exploreCandidates = scoredBooks.slice(safeCount);
+    debugLog('[NEW] exploreCandidates:', exploreCandidates.length);
+
+    // safeThemes
+    const safeThemes = new Set();
+    safeBooks.forEach(item => {
+      const themes = item._themes || extractThemesFromAladinBook(item.book, allBooks).themes;
+      themes.forEach(t => safeThemes.add(t));
+    });
+    debugLog('[NEW] safeThemes size=', safeThemes.size, 'sample=', [...safeThemes].slice(0, 10));
+
+    // rankedExplore (new themes)
     const rankedExplore = exploreCandidates
       .map(item => {
         const themes = item._themes || extractThemesFromAladinBook(item.book, allBooks).themes;
         const newThemeCount = themes.filter(t => t && !safeThemes.has(t)).length;
         return { ...item, _newThemeCount: newThemeCount };
       })
-      .filter(item => item._newThemeCount > 0)
+      // ✅ 필터 제거: 0도 포함해서 rankedExplore 크기 급감 방지
       .sort((a, b) => {
-        // booksPerDay가 높을수록 새 테마 많은 책을 더 선호
-        if (booksPerDay >= 6) {
-          if (b._newThemeCount !== a._newThemeCount) return b._newThemeCount - a._newThemeCount;
-        }
+        // ✅ 항상 "새테마 많은 책" 우선 (booksPerDay 상관없이)
+        if (b._newThemeCount !== a._newThemeCount) return b._newThemeCount - a._newThemeCount;
+        // 새테마가 같으면 점수 우선
         return b.finalScore - a.finalScore;
       });
+    debugLog('[NEW] rankedExplore size:', rankedExplore.length, 'newThemeCount top10:',
+      rankedExplore.slice(0, 10).map(x => x._newThemeCount).join(',')
+    );
 
-    const exploreBooks = rankedExplore.slice(0, exploreCount);
+    const EXPLORE_POOL_SIZE = 30; // 새 테마 우선 풀
+    const explorePool = rankedExplore.slice(0, EXPLORE_POOL_SIZE);
+
+    let exploreBooks = shuffleArray(explorePool).slice(0, exploreCount);
+
+    debugLog('[NEW] explore sample:', {
+      rankedExplore: rankedExplore.length,
+      explorePoolSize: explorePool.length,
+      exploreCount,
+      picked: exploreBooks.length
+    });
+
+    const safeIsbns = new Set(
+      safeBooks.map(x => normIsbn(x.book.isbn13 || x.book.isbn)).filter(Boolean)
+    );
+
+    exploreBooks = exploreBooks.filter(x => {
+      const isbn = normIsbn(x.book.isbn13 || x.book.isbn);
+      return isbn && !safeIsbns.has(isbn);
+    });
+
+    // 부족하면 explorePool에서 다시 채움
+    if (exploreBooks.length < exploreCount) {
+      const need = exploreCount - exploreBooks.length;
+      const refill = shuffleArray(explorePool)
+        .filter(x => {
+          const isbn = normIsbn(x.book.isbn13 || x.book.isbn);
+          return isbn && !safeIsbns.has(isbn);
+        })
+        .slice(0, need);
+
+      exploreBooks = exploreBooks.concat(refill);
+    }
 
     let finalList = [...safeBooks, ...exploreBooks].slice(0, topCount);
     if (forceRefresh) finalList = shuffleArray(finalList);
+    debugLog('[NEW] split:', {
+      safe: safeBooks.length,
+      explore: exploreBooks.length,
+      safeTop: safeBooks.slice(0, 3).map(x => x.book.title),
+      exploreTop: exploreBooks.slice(0, 3).map(x => x.book.title),
+    });
+    debugLog('[NEW] scoredBooks:', scoredBooks.length, 'topCount:', topCount, 'forceRefresh:', forceRefresh);
+    debugLog('[NEW] finalList titles:',
+      finalList.map(x => `${x.book.title} (${Math.round(x.finalScore * 10) / 10})`).join(' | ')
+    );
 
     // 추천 이유 생성
     const booksWithReason = await Promise.all(
       finalList.map(async (item) => {
         const isbn = item.book.isbn13 || item.book.isbn;
-
+        
         let why;
         if (childProfile.hasData) {
-          why = await generateRecommendationReason(item.book, item, childProfile, allBooks);
+          why = await generateRecommendationReason(item.book, item, childProfile, allBooks, explicitInterests);
         } else {
-          why = { text: generateRuleBasedReason(item.book, item, childProfile, allBooks), source: 'rule_no_data' };
+          why = { text: generateRuleBasedReason(item.book, item, childProfile, explicitInterests, allBooks), source: 'rule_no_data' };
         }
 
         return {
@@ -972,6 +1140,13 @@ module.exports = async (req, res) => {
       success: true,
       total: booksWithReason.length,
       categories: CATEGORY_IDS,
+      debug: {
+        poolSource,
+        fetchedUniqueCount: uniqueBooks.length,
+        candidatesCount: filteredBooks.length,
+        scoredCount: scoredBooks.length,
+        topCount
+      },
       childProfile: {
         hasData: childProfile.hasData,
         ageMonths: childProfile.ageMonths,

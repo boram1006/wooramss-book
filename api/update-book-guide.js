@@ -14,6 +14,11 @@ export default async function handler(req, res) {
 
   const { createClient } = require('@supabase/supabase-js');
   const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
+const DEBUG_RECO = process.env.DEBUG_RECO === '1';
+
+function debugLog(...args) {
+  if (DEBUG_RECO) console.log(...args);
+}
   const ALADIN_API_KEY = process.env.ALADIN_API_KEY || 'ttbcasey862231001';
 
   // Supabase 클라이언트 초기화
@@ -66,7 +71,7 @@ export default async function handler(req, res) {
       }]
     };
 
-    console.log('[WHY] chat payload temperature =', payload.temperature);
+    debugLog('[WHY] chat payload temperature =', payload.temperature);
 
     const aiResponse = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
@@ -82,7 +87,7 @@ export default async function handler(req, res) {
     }
 
     const aiData = await aiResponse.json();
-    console.log('[WHY] response status:', aiResponse.status, 'finish_reason:', aiData?.choices?.[0]?.finish_reason);
+    debugLog('[WHY] response status:', aiResponse.status, 'finish_reason:', aiData?.choices?.[0]?.finish_reason);
     const text = aiData.choices?.[0]?.message?.content || '';
     
     // JSON 추출

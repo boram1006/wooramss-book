@@ -532,6 +532,18 @@
                     emotionSensitivity: 'normal'
                 };
             });
+            const [selectedInterests, setSelectedInterests] = useState(() => {
+                const saved = localStorage.getItem('selectedInterests');
+                try {
+                    const parsed = saved ? JSON.parse(saved) : [];
+                    return Array.isArray(parsed) ? parsed : [];
+                } catch (e) {
+                    return [];
+                }
+            });
+            useEffect(() => {
+                localStorage.setItem('selectedInterests', JSON.stringify(selectedInterests));
+            }, [selectedInterests]);
 
             const computedAgeMonths = computeAgeMonthsFromBirthdate(childProfile.birthDate);
             const effectiveAgeMonths = Number.isFinite(computedAgeMonths)
@@ -578,7 +590,7 @@
                     loadTodayRecommendations(true).catch(err => console.error('오늘의 추천 재로드 실패:', err));
                     loadAladinNewBooks(true).catch(err => console.error('알라딘 신간 재로드 실패:', err));
                 }
-            }, [effectiveAgeMonths, childProfile.emotionSensitivity]);
+            }, [effectiveAgeMonths, childProfile.emotionSensitivity, selectedInterests]);
 
             async function loadData() {
                 try {
@@ -613,7 +625,7 @@
                 }
             }
 
-            // 📚 알라딘 신간 추천 (4~7세, 캐릭터 제외) - 한 달에 한 번만 로드
+            // 📚 신간 기반 오늘의 추천 (4~7세, 캐릭터 제외) - 한 달에 한 번만 로드
             async function loadAladinNewBooks(forceRefresh = false) {
                 const today = new Date();
                 const monthKey = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`; // YYYY-MM
@@ -621,11 +633,11 @@
                 // 강제 새로고침이 아니면 캐시 확인
                 if (!forceRefresh) {
                     try {
-                        const cached = localStorage.getItem('aladinNewBooks');
+                        const cached = localStorage.getItem('today_recommend_cache');
                         if (cached) {
                             const { date, books } = JSON.parse(cached);
                             if (date === monthKey && books.length > 0) {
-                                console.log('📘 알라딘 신간 캐시 사용:', books.length, '권');
+                                console.log('📘 오늘의 추천 캐시 사용:', books.length, '권');
                                 setAladinNewBooks(books);
                                 return books;
                             }
@@ -634,12 +646,12 @@
                         console.error('캐시 로드 실패:', e);
                     }
                 } else {
-                    localStorage.removeItem('aladinNewBooks');
+                    localStorage.removeItem('today_recommend_cache');
                 }
                 
                 // 새로 로드
                 setAladinLoading(true);
-                console.log('📘 알라딘 신간 API 호출...');
+                console.log('📘 오늘의 추천(신간 기반) API 호출...');
                 
                 try {
                     // 아이 프로필을 쿼리 파라미터로 전달
@@ -648,6 +660,9 @@
                     if (childProfile.gender) profileParams.append('gender', childProfile.gender);
                     if (childProfile.booksPerDay) profileParams.append('booksPerDay', childProfile.booksPerDay);
                     if (childProfile.emotionSensitivity) profileParams.append('emotionSensitivity', childProfile.emotionSensitivity);
+                    if (selectedInterests.length > 0) profileParams.append('interests', selectedInterests.join(','));
+                    profileParams.append('poolSource', 'all');
+                    profileParams.append('userId', 'default');
                     
                     if (forceRefresh) {
                         profileParams.append('force', '1');
@@ -665,47 +680,29 @@
                     
                     // 디버깅 정보 출력
                     if (data.debug) {
-                        console.log('📘 디버깅 정보:', data.debug);
+                        console.log('📘 추천 디버깅 정보:', data.debug);
                     }
                     
                     // 백엔드가 반환하는 형식: { success: true, total: number, books: [...] }
                     if (data.success && data.books && data.books.length > 0) {
-                        console.log('📘 신간:', data.books.length, '권', data.books);
+                        console.log('📘 오늘의 추천:', data.books.length, '권', data.books);
                         
                         // 첫 번째 책의 recommendationReason 확인
                         if (data.books[0]) {
-                            console.log('📘 첫 번째 책 추천 이유:', data.books[0].recommendationReason);
+                            console.log('📘 첫 번째 추천 이유:', data.books[0].recommendationReason);
                         }
                         
-                        // 필터링: 캐릭터/학습 제외 (백엔드에서 이미 필터링되었지만 추가 필터링)
-                        const excludeKeywords = ['뽀로로', '핑크퐁', '타요', '포켓몬', '디즈니', '학습', '워크북', '문제집', '스티커', '세트', '전집'];
-                        
-                        const filtered = data.books.filter(book => {
-                            const title = (book.title || '').toLowerCase();
-                            const desc = (book.description || '').toLowerCase();
-                            const combined = (title + ' ' + desc);
-                            
-                            const hasExcluded = excludeKeywords.some(keyword => 
-                                combined.includes(keyword.toLowerCase())
-                            );
-                            
-                            return !hasExcluded;
-                        });
-                        
-                        console.log('📘 필터링 후:', filtered.length, '권');
-                        if (filtered[0]) {
-                            console.log('📘 필터링 후 첫 번째 책:', filtered[0].title, '추천 이유:', filtered[0].recommendationReason);
-                        }
+                        const filtered = data.books;
                         
                         // localStorage에 저장 (월별 키 사용)
                         try {
                             const today = new Date();
                             const monthKey = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`;
-                            localStorage.setItem('aladinNewBooks', JSON.stringify({
+                            localStorage.setItem('today_recommend_cache', JSON.stringify({
                                 date: monthKey,
                                 books: filtered
                             }));
-                            console.log('📘 알라딘 신간 캐시 저장:', filtered.length, '권');
+                            console.log('📘 오늘의 추천 캐시 저장:', filtered.length, '권');
                         } catch (e) {
                             console.error('캐시 저장 실패:', e);
                         }
@@ -713,7 +710,7 @@
                         setAladinNewBooks(filtered);
                         return filtered;
                     } else {
-                        console.log('📘 알라딘 신간 없음', data);
+                        console.log('📘 오늘의 추천 없음', data);
                         // 신간이 없어도 기존 데이터는 유지 (빈 배열로 설정하지 않음)
                         if (aladinNewBooks.length === 0) {
                             setAladinNewBooks([]);
@@ -721,7 +718,7 @@
                         return [];
                     }
                 } catch (error) {
-                    console.error('📘 알라딘 신간 API 오류:', error);
+                    console.error('📘 오늘의 추천 API 오류:', error);
                     // 에러 발생 시에도 기존 데이터 유지
                     if (aladinNewBooks.length === 0) {
                         setAladinNewBooks([]);
@@ -729,6 +726,34 @@
                     return [];
                 } finally {
                     setAladinLoading(false);
+                }
+            }
+
+            async function excludeAladinBook(book, reason = '') {
+                try {
+                    const response = await fetch('/api/exclude-aladin-book', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            isbn13: book.isbn13 || book.isbn,
+                            title: book.title,
+                            reason,
+                            userId: 'default'
+                        })
+                    });
+                    const data = await response.json();
+                    if (!data.success) {
+                        alert('오류: ' + (data.error || '제외 실패'));
+                        return false;
+                    }
+                    setAladinNewBooks(prev => prev.filter(item =>
+                        (item.isbn13 || item.isbn) !== (book.isbn13 || book.isbn)
+                    ));
+                    return true;
+                } catch (error) {
+                    console.error('제외 처리 오류:', error);
+                    alert('제외 처리 중 오류가 발생했습니다');
+                    return false;
                 }
             }
 
@@ -1210,6 +1235,7 @@
                     if (childProfile.gender) profileParams.append('gender', childProfile.gender);
                     if (childProfile.booksPerDay) profileParams.append('booksPerDay', childProfile.booksPerDay);
                     if (childProfile.emotionSensitivity) profileParams.append('emotionSensitivity', childProfile.emotionSensitivity);
+                    if (selectedInterests.length > 0) profileParams.append('interests', selectedInterests.join(','));
                     
                     if (forceRefresh) {
                         profileParams.append('force', '1');
@@ -1686,7 +1712,7 @@
                                         </div>
                                         <button
                                             onClick={() => {
-                                                localStorage.removeItem('aladinNewBooks');
+                                                localStorage.removeItem('today_recommend_cache');
                                                 loadAladinNewBooks(true);
                                             }}
                                             disabled={aladinLoading}
@@ -1707,7 +1733,7 @@
                                     <p className="section-subtitle">
                                         새로 추가된 신선한 이야기들 · {(() => {
                                             try {
-                                                const cached = localStorage.getItem('aladinNewBooks');
+                                                const cached = localStorage.getItem('today_recommend_cache');
                                                 if (cached) {
                                                     const { date } = JSON.parse(cached);
                                                     if (date) {
@@ -1761,6 +1787,29 @@
                                                         e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,0.05)';
                                                     }}
                                                 >
+                                                    <button
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            if (confirm('이 책을 신간 추천에서 제외할까요?')) {
+                                                                excludeAladinBook(book, 'user_excluded');
+                                                            }
+                                                        }}
+                                                        style={{
+                                                            position: 'absolute',
+                                                            top: '0.5rem',
+                                                            left: '0.5rem',
+                                                            background: '#FFE4E1',
+                                                            color: '#FF69B4',
+                                                            border: 'none',
+                                                            padding: '0.25rem 0.5rem',
+                                                            borderRadius: '20px',
+                                                            fontSize: '0.7rem',
+                                                            fontWeight: 'bold',
+                                                            cursor: 'pointer'
+                                                        }}
+                                                    >
+                                                        추천 제외
+                                                    </button>
                                                     <span style={{
                                                         position: 'absolute',
                                                         top: '0.5rem',
@@ -2361,6 +2410,8 @@
                         <SettingsView
                             profile={childProfile}
                             onSave={saveChildProfile}
+                            selectedInterests={selectedInterests}
+                            onChangeInterests={setSelectedInterests}
                         />
                     )}
                     </div>
@@ -4187,7 +4238,7 @@
             );
         }
 
-        function SettingsView({ profile, onSave }) {
+        function SettingsView({ profile, onSave, selectedInterests, onChangeInterests }) {
             const [birthDate, setBirthDate] = useState(profile.birthDate || '');
             const [gender, setGender] = useState(profile.gender || '');
             const [booksPerDay, setBooksPerDay] = useState(profile.booksPerDay || 2);
@@ -4195,6 +4246,52 @@
             const [saving, setSaving] = useState(false);
             const computedAgeMonths = computeAgeMonthsFromBirthdate(birthDate);
             const hasComputedAgeMonths = Number.isFinite(computedAgeMonths);
+            const [interestCandidates, setInterestCandidates] = useState([]);
+            const [autoTopInterests, setAutoTopInterests] = useState([]);
+            const [interestLoading, setInterestLoading] = useState(false);
+
+            useEffect(() => {
+                let cancelled = false;
+                const loadCandidates = async () => {
+                    setInterestLoading(true);
+                    try {
+                        const response = await fetch('/api/interest-candidates', { cache: 'no-store' });
+                        if (!response.ok) throw new Error('관심사 후보 로드 실패');
+                        const data = await response.json();
+                        if (!cancelled) {
+                            setInterestCandidates(data.candidates || []);
+                            setAutoTopInterests(data.autoTop || []);
+                        }
+                    } catch (e) {
+                        if (!cancelled) {
+                            setInterestCandidates([]);
+                            setAutoTopInterests([]);
+                        }
+                    } finally {
+                        if (!cancelled) setInterestLoading(false);
+                    }
+                };
+                loadCandidates();
+                return () => { cancelled = true; };
+            }, []);
+
+            const toggleInterest = (label) => {
+                const normalized = String(label || '').trim();
+                if (!normalized) return;
+                const isSelected = selectedInterests.some(
+                    (item) => item.toLowerCase() === normalized.toLowerCase()
+                );
+                let next = [];
+                if (isSelected) {
+                    next = selectedInterests.filter(
+                        (item) => item.toLowerCase() !== normalized.toLowerCase()
+                    );
+                } else {
+                    if (selectedInterests.length >= 8) return;
+                    next = [...selectedInterests, normalized];
+                }
+                onChangeInterests(next);
+            };
 
             const handleSave = () => {
                 setSaving(true);
@@ -4241,6 +4338,72 @@
                                     ? `현재 월령: ${computedAgeMonths}개월`
                                     : '생년월일을 입력하면 월령이 자동 계산돼요.'}
                             </div>
+                        </div>
+
+                        {/* 요즘 관심사 */}
+                        <div style={{ marginBottom: '1.5rem' }}>
+                            <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold' }}>
+                                요즘 관심사
+                            </label>
+                            <div style={{ fontSize: '0.85rem', color: '#777', marginBottom: '0.5rem' }}>
+                                자동으로 잡힌 관심사
+                            </div>
+                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', marginBottom: '0.75rem' }}>
+                                {interestLoading && (
+                                    <span style={{ fontSize: '0.85rem', color: '#999' }}>불러오는 중...</span>
+                                )}
+                                {!interestLoading && autoTopInterests.length === 0 && (
+                                    <span style={{ fontSize: '0.85rem', color: '#999' }}>데이터가 부족해요</span>
+                                )}
+                                {!interestLoading && autoTopInterests.map((tag, idx) => (
+                                    <span key={idx} style={{
+                                        background: '#F0F0F0',
+                                        color: '#666',
+                                        padding: '0.25rem 0.75rem',
+                                        borderRadius: '20px',
+                                        fontSize: '0.85rem'
+                                    }}>
+                                        {tag}
+                                    </span>
+                                ))}
+                            </div>
+
+                            <div style={{ fontSize: '0.85rem', color: '#777', marginBottom: '0.5rem' }}>
+                                직접 선택
+                            </div>
+                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
+                                {!interestLoading && interestCandidates.length === 0 && (
+                                    <span style={{ fontSize: '0.85rem', color: '#999' }}>후보가 없습니다</span>
+                                )}
+                                {interestCandidates.map((c, idx) => {
+                                    const isSelected = selectedInterests.some(
+                                        (item) => item.toLowerCase() === c.label.toLowerCase()
+                                    );
+                                    return (
+                                        <button
+                                            key={`${c.label}-${idx}`}
+                                            type="button"
+                                            onClick={() => toggleInterest(c.label)}
+                                            style={{
+                                                border: isSelected ? '2px solid #8B7EC8' : '1px solid #ddd',
+                                                background: isSelected ? '#F0EDFF' : 'white',
+                                                color: '#333',
+                                                padding: '0.35rem 0.75rem',
+                                                borderRadius: '20px',
+                                                fontSize: '0.85rem',
+                                                cursor: 'pointer'
+                                            }}
+                                        >
+                                            {c.label}
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                            {selectedInterests.length > 0 && (
+                                <div style={{ marginTop: '0.5rem', fontSize: '0.85rem', color: '#666' }}>
+                                    선택됨: {selectedInterests.join(', ')}
+                                </div>
+                            )}
                         </div>
 
                         {/* 성별 */}
