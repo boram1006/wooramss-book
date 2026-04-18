@@ -82,13 +82,9 @@ function getTopCountByBooksPerDay(booksPerDay) {
   return 12;
 }
 
-// booksPerDay에 따라 안전/탐색 비율 조절
+// 좋아하는 것 6 : 새로운 것 4 고정
 function getSafeRatioByBooksPerDay(booksPerDay) {
-  // 적게 읽는 날: 안전 위주 / 많이 읽는 날: 탐색 확대
-  if (booksPerDay <= 1) return 0.85; // 85/15
-  if (booksPerDay <= 3) return 0.75; // 75/25
-  if (booksPerDay <= 5) return 0.70; // 70/30
-  return 0.60; // 60/40
+  return 0.6;
 }
 
 async function fetchAladinPool({ queryType, categoryId, pages = 4, maxResults = 50 }) {

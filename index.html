@@ -545,6 +545,15 @@
                 localStorage.setItem('selectedInterests', JSON.stringify(selectedInterests));
             }, [selectedInterests]);
 
+            const [notInterestedBooks, setNotInterestedBooks] = useState(() => {
+                try {
+                    const saved = localStorage.getItem('notInterestedBooks');
+                    return saved ? JSON.parse(saved) : [];
+                } catch (e) {
+                    return [];
+                }
+            });
+
             const computedAgeMonths = computeAgeMonthsFromBirthdate(childProfile.birthDate);
             const effectiveAgeMonths = Number.isFinite(computedAgeMonths)
                 ? computedAgeMonths
@@ -753,6 +762,18 @@
                     return false;
                 }
             }
+
+            // DB 책 "안볼래요" 처리
+            const skipDbBook = (bookId) => {
+                const id = String(bookId);
+                const updated = [...notInterestedBooks, id];
+                setNotInterestedBooks(updated);
+                localStorage.setItem('notInterestedBooks', JSON.stringify(updated));
+                // 즉시 목록에서 제거
+                setRecommendations(prev => prev.filter(item => String(item.book.id) !== id));
+                // 캐시 무효화 (다음 로드 시 skip 반영)
+                localStorage.removeItem('todayRecommendations');
+            };
 
             const stopSearchCamera = () => {
                 if (searchStreamRef.current) {
@@ -1233,12 +1254,13 @@
                     if (childProfile.booksPerDay) profileParams.append('booksPerDay', childProfile.booksPerDay);
                     if (childProfile.emotionSensitivity) profileParams.append('emotionSensitivity', childProfile.emotionSensitivity);
                     if (selectedInterests.length > 0) profileParams.append('interests', selectedInterests.join(','));
-                    
+                    if (notInterestedBooks.length > 0) profileParams.append('skip', notInterestedBooks.join(','));
+
                     if (forceRefresh) {
                         profileParams.append('force', '1');
                         profileParams.append('ts', Date.now().toString());
                     }
-                    
+
                     const url = `/api/today-recommendations${profileParams.toString() ? '?' + profileParams.toString() : ''}`;
                     const response = await fetch(url, { cache: 'no-store' });
                     
@@ -1693,6 +1715,27 @@
                                                             </div>
                                                         </div>
                                                     )}
+                                                    <button
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            if (confirm('이 책을 추천 목록에서 빼드릴게요. 괜찮으세요?')) {
+                                                                skipDbBook(item.book.id);
+                                                            }
+                                                        }}
+                                                        style={{
+                                                            marginTop: '0.75rem',
+                                                            width: '100%',
+                                                            padding: '0.4rem 0',
+                                                            background: 'transparent',
+                                                            border: '1px solid #ddd',
+                                                            borderRadius: '8px',
+                                                            color: '#aaa',
+                                                            fontSize: '0.78rem',
+                                                            cursor: 'pointer'
+                                                        }}
+                                                    >
+                                                        안 볼래요
+                                                    </button>
                                                 </div>
                                             </div>
                                         ))}
