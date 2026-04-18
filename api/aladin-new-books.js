@@ -255,7 +255,7 @@ function analyzeChildProfile(readingLogs, allBooks) {
       if (b.daysAgo === null) return -1;
       return a.daysAgo - b.daysAgo;
     })
-    .slice(-30)
+    .slice(0, 30)
     .map(({ log }) => log);
 
   const readBooks = recentLogs
@@ -480,10 +480,13 @@ function calculateRecommendationScore(book, childProfile, airtableBooks, themeSt
     breakdown.themePreference = 30;
   } else {
     const maxThemeScore = Math.max(...Object.values(childProfile.themePreferences), 1);
-    breakdown.themePreference =
-      matchedThemes.length > 0
-      ? (themeScore / matchedThemes.length) * 55 / maxThemeScore
-      : 0;
+    if (matchedThemes.length > 0) {
+      const avgScore = themeScore / matchedThemes.length;
+      const breadthMultiplier = Math.min(1.5, 1 + Math.log2(matchedThemes.length) * 0.15);
+      breakdown.themePreference = Math.min(55, avgScore * breadthMultiplier * 55 / maxThemeScore);
+    } else {
+      breakdown.themePreference = 0;
+    }
   }
 
   // 2. EngagementScore (25%)
@@ -1065,13 +1068,16 @@ module.exports = async (req, res) => {
       return isbn && !safeIsbns.has(isbn);
     });
 
-    // 부족하면 explorePool에서 다시 채움
+    // 부족하면 explorePool에서 다시 채움 (safeIsbns + 이미 선택된 exploreIsbns 모두 제외)
     if (exploreBooks.length < exploreCount) {
       const need = exploreCount - exploreBooks.length;
+      const exploreIsbns = new Set(
+        exploreBooks.map(x => normIsbn(x.book.isbn13 || x.book.isbn)).filter(Boolean)
+      );
       const refill = shuffleArray(explorePool)
         .filter(x => {
           const isbn = normIsbn(x.book.isbn13 || x.book.isbn);
-          return isbn && !safeIsbns.has(isbn);
+          return isbn && !safeIsbns.has(isbn) && !exploreIsbns.has(isbn);
         })
         .slice(0, need);
 

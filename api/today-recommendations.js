@@ -193,7 +193,7 @@ function analyzeChildProfile(readingLogs, allBooks) {
     return { log, daysAgo };
   });
 
-  // 최근 기록 (날짜 기준 또는 최근 N개)
+  // 최근 기록 (날짜 기준 오름차순 → 앞 30개가 가장 최근)
   const recentLogs = logsWithDates
     .filter(({ daysAgo }) => daysAgo === null || daysAgo <= 60)
     .sort((a, b) => {
@@ -202,7 +202,7 @@ function analyzeChildProfile(readingLogs, allBooks) {
       if (b.daysAgo === null) return -1;
       return a.daysAgo - b.daysAgo;
     })
-    .slice(-30)
+    .slice(0, 30)
     .map(({ log }) => log);
 
   // 연령 추정 (읽은 책들의 연령 범위 기반)
@@ -380,9 +380,14 @@ function calculateRecommendationScore(book, childProfile, allBooks, readingLogs,
     breakdown.themePreference = 30;
   } else {
     const maxThemeScore = Math.max(...Object.values(childProfile.themePreferences), 1);
-    breakdown.themePreference = matchedThemes.length > 0 
-      ? (themeScore / matchedThemes.length) * 55 / maxThemeScore
-      : 0;
+    if (matchedThemes.length > 0) {
+      const avgScore = themeScore / matchedThemes.length;
+      // 매칭 테마 개수가 많을수록 완만하게 보너스 (log2 스케일, 최대 1.5배)
+      const breadthMultiplier = Math.min(1.5, 1 + Math.log2(matchedThemes.length) * 0.15);
+      breakdown.themePreference = Math.min(55, avgScore * breadthMultiplier * 55 / maxThemeScore);
+    } else {
+      breakdown.themePreference = 0;
+    }
   }
 
   // 2. EngagementScore (25%)
@@ -1027,11 +1032,12 @@ module.exports = async (req, res) => {
     const safeIds = new Set(safeBooks.map(x => x.book.id).filter(Boolean));
     exploreBooks = exploreBooks.filter(x => x.book?.id && !safeIds.has(x.book.id));
 
-    // 부족하면 explorePool에서 refill
+    // 부족하면 explorePool에서 refill (safeIds + 이미 선택된 exploreIds 모두 제외)
     if (exploreBooks.length < exploreCount) {
       const need = exploreCount - exploreBooks.length;
+      const exploreIds = new Set(exploreBooks.map(x => x.book.id).filter(Boolean));
       const refill = shuffleArray(explorePool)
-        .filter(x => x.book?.id && !safeIds.has(x.book.id))
+        .filter(x => x.book?.id && !safeIds.has(x.book.id) && !exploreIds.has(x.book.id))
         .slice(0, need);
 
       exploreBooks = exploreBooks.concat(refill);
