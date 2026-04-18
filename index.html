@@ -559,11 +559,7 @@
                 };
                 setChildProfile(normalizedProfile);
                 localStorage.setItem('childProfile', JSON.stringify(normalizedProfile));
-                // 프로필 변경 시 추천 재로드
-                if (books.length > 0 && readingLogs.length > 0) {
-                    loadTodayRecommendations(true).catch(err => console.error('오늘의 추천 재로드 실패:', err));
-                    loadAladinNewBooks(true).catch(err => console.error('알라딘 신간 재로드 실패:', err));
-                }
+                // 추천 재로드는 useEffect([effectiveAgeMonths, ...])가 리렌더 후 올바른 값으로 처리
             };
 
             useEffect(() => {
@@ -590,7 +586,7 @@
                     loadTodayRecommendations(true).catch(err => console.error('오늘의 추천 재로드 실패:', err));
                     loadAladinNewBooks(true).catch(err => console.error('알라딘 신간 재로드 실패:', err));
                 }
-            }, [effectiveAgeMonths, childProfile.emotionSensitivity, selectedInterests]);
+            }, [effectiveAgeMonths, childProfile.emotionSensitivity, childProfile.booksPerDay, selectedInterests]);
 
             async function loadData() {
                 try {
@@ -635,8 +631,9 @@
                     try {
                         const cached = localStorage.getItem('today_recommend_cache');
                         if (cached) {
-                            const { date, books } = JSON.parse(cached);
-                            if (date === monthKey && books.length > 0) {
+                            const { date, books, ageMonths: cachedAgeMonths } = JSON.parse(cached);
+                            const ageMonthsMatch = effectiveAgeMonths === '' || cachedAgeMonths === effectiveAgeMonths;
+                            if (date === monthKey && books.length > 0 && ageMonthsMatch) {
                                 console.log('📘 오늘의 추천 캐시 사용:', books.length, '권');
                                 setAladinNewBooks(books);
                                 return books;
