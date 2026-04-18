@@ -615,54 +615,57 @@ function pickUniqueHooksFromText(text, limit = 2) {
     .slice(0, limit);
 }
 
-function buildRuleReasons(book, scoreData, childProfile, airtableBooks, explicitInterests) {
+function buildRuleReasons(book, scoreData, childProfile, airtableBooks, explicitInterests, recType) {
   const reasons = [];
-
   const themes = extractThemesFromAladinBook(book, airtableBooks).themes;
-  const matchedThemes = themes;
 
+  // 1) 명시 관심사 매칭
   const matchedExplicit = (explicitInterests || []).filter(t => themes.includes(t));
   if (matchedExplicit.length) {
-    reasons.push(`요즘 관심사로 선택한 '${matchedExplicit.slice(0, 2).join(', ')}'와 잘 맞아요`);
+    reasons.push(`직접 관심사로 고른 '${matchedExplicit.slice(0, 2).join(', ')}'가 담긴 신간이에요`);
   }
 
-  if (scoreData.breakdown.themePreference >= 30 && matchedThemes.length > 0) {
-    reasons.push(`아이의 선호 테마(${matchedThemes.slice(0, 2).join(', ')})와 잘 맞아요`);
-  } else if (matchedThemes.length > 0) {
-    reasons.push(`이번엔 ${matchedThemes.slice(0, 2).join(', ')} 테마로 가볍게 확장해볼 수 있어요`);
-  }
-
+  // 2) 참여도 근거 (구체적 수치 우선)
   if (scoreData.evidence?.length) {
     const e = scoreData.evidence[0];
-    reasons.push(`최근 기록에서 ${e.replace(/테마\s?/g, '').replace(/\s+/g, ' ')} 경향이 있어요`);
+    const converted = e
+      .replace(/(.+?) 테마 완독 (\d+)회/, '$1 주제 책을 최근 $2번 끝까지 읽었어요')
+      .replace(/(.+?) 테마 집중 (\d+)회/, '$1 주제 책에서 집중력이 좋았어요')
+      .replace(/(.+?) 테마 질문 많음 (\d+)회/, '$1 주제 책을 읽으며 질문을 많이 했어요');
+    reasons.push(converted !== e ? converted : `최근 ${e.replace(/테마\s?/g, '').trim()} 패턴이 있어요`);
   } else if (scoreData.breakdown.engagement >= 12) {
-    reasons.push('끝까지 읽거나 집중도가 높았던 유형과 가까워요');
+    reasons.push('비슷한 유형의 책을 끝까지 읽거나 집중한 경향이 있어요');
   }
 
-  if (childProfile.emotionSensitivity === 'high') {
-    if (scoreData.breakdown.comfort >= 15) reasons.push('감정적으로 편안하게 읽기 좋은 흐름을 우선했어요');
-    else reasons.push('민감할 수 있는 요소는 조심해서 선택했어요');
-  } else {
-    if (scoreData.breakdown.comfort >= 15) reasons.push('부담 없이 편안하게 즐길 수 있는 편이에요');
+  // 3) 테마 선호 근거
+  if (!scoreData.evidence?.length) {
+    if (scoreData.breakdown.themePreference >= 30 && themes.length > 0) {
+      reasons.push(`좋아하는 '${themes.slice(0, 2).join(', ')}' 계열 신간이에요`);
+    } else if (recType === 'explore' && themes.length > 0) {
+      reasons.push(`평소와 살짝 다른 '${themes[0]}' 분위기의 신간이에요`);
+    }
   }
 
-  const age = book.ageRange || '';
-  if (age) reasons.push(`연령 안내(${age})를 참고해도 무난해요`);
+  // 4) 안정감 근거 (감정 예민한 경우만)
+  if (childProfile.emotionSensitivity === 'high' && scoreData.breakdown.comfort >= 15) {
+    reasons.push('자극적인 요소 없이 안정감 있게 읽을 수 있어요');
+  }
 
   return reasons.filter(Boolean).slice(0, 3);
 }
 
 function buildHybridSystemPrompt() {
-  return `
-너는 부모에게 아동 도서를 추천하는 문장 작성자다.
-아래 [추천 근거]에 있는 내용만 사용해서 자연스러운 한국어 문장으로 풀어써라.
-규칙:
-- 근거를 바꾸거나 새 사실을 만들지 마라(추가 정보 추측 금지).
-- 광고/과장 표현 금지: "큰 도움이 됩니다", "성장을 돕습니다", "배울 수 있습니다" 금지.
-- 모든 책에 공통으로 들어갈 수 있는 뻔한 문장 피하기.
-- 2~4문장, 120~220자 내외.
-- 가능하면 [책 설명에서 잡은 포인트]를 1개 이상 자연스럽게 포함해(없으면 생략).
-`;
+  return `너는 아이 독서 기록 앱에서 부모에게 그림책 추천 이유를 써주는 역할이다.
+아래 [재료]만 사용해 따뜻하고 구체적인 한국어 2~3문장을 써라.
+
+핵심 규칙:
+- [추천 근거]를 뼈대로, [책 소개] 속 이 책만의 내용을 1개 이상 자연스럽게 녹여라.
+- 이 아이만을 위한 추천처럼 들려야 한다. 최근 읽기 패턴과 자연스럽게 연결하라.
+- [추천 유형]이 "탐색"이면 새로운 시도임을 은근히 녹여라 ("이런 분위기는 처음이지만~", "살짝 다른 결의~" 등).
+- 금지: "성장을 돕습니다", "큰 도움이 됩니다", "배울 수 있습니다", "발달에 좋은", "교육적", "상상력을 키", "꼭 읽어보세요", "강력 추천", "아이의 발달"
+- 어떤 책에나 붙여도 어색하지 않은 뻔한 문장 금지.
+- 없는 사실을 추측하거나 만들지 마라.
+- 100~180자.`;
 }
 
 function extractResponseText(data) {
@@ -695,36 +698,34 @@ function shuffleArray(list) {
 // ============================================
 // AI 기반 추천 이유 생성 (하이브리드 버전)
 // ============================================
-async function generateRecommendationReason(book, scoreData, childProfile, airtableBooks, explicitInterests) {
+async function generateRecommendationReason(book, scoreData, childProfile, airtableBooks, explicitInterests, recType) {
   if (!OPENAI_API_KEY) {
-    return { text: generateRuleBasedReason(book, scoreData, childProfile, explicitInterests, airtableBooks), source: 'rule_no_key' };
+    return { text: generateRuleBasedReason(book, scoreData, childProfile, explicitInterests, airtableBooks, recType), source: 'rule_no_key' };
   }
 
-  const ruleReasons = buildRuleReasons(book, scoreData, childProfile, airtableBooks, explicitInterests);
+  const ruleReasons = buildRuleReasons(book, scoreData, childProfile, airtableBooks, explicitInterests, recType);
   if (!ruleReasons.length) {
-    return { text: generateRuleBasedReason(book, scoreData, childProfile, explicitInterests, airtableBooks), source: 'rule_empty_reasons' };
+    return { text: generateRuleBasedReason(book, scoreData, childProfile, explicitInterests, airtableBooks, recType), source: 'rule_empty_reasons' };
   }
 
-  const hooks = pickUniqueHooksFromText(book.description || '', 2);
+  // 책 소개 직접 전달 (200자 제한)
+  const description = (book.description || '').slice(0, 200);
 
-  const userPrompt = `
+  const userPrompt = `[책 소개]
+${description || '(소개 없음)'}
+
 [책 정보]
 - 제목: ${book.title}
-- 카테고리: ${book.categoryName || '정보 없음'}
-- 발행일: ${book.pubDate || '정보 없음'}
+- 테마: ${extractThemesFromAladinBook(book, airtableBooks).themes.join(', ') || '없음'}
 
 [아이 정보]
 - 나이: ${Math.floor(childProfile.ageMonths / 12)}세 ${childProfile.ageMonths % 12}개월
-- 감정 예민도: ${childProfile.emotionSensitivity}
+- 추천 유형: ${recType === 'explore' ? '탐색 (새로운 시도)' : '익숙한 취향'}
 
 [추천 근거]
 - ${ruleReasons.join('\n- ')}
 
-[책 설명에서 잡은 포인트]
-- ${hooks.length ? hooks.join(', ') : '없음'}
-
-위 내용을 바탕으로 추천 이유를 작성해줘.
-`;
+위 재료로 추천 이유 2~3문장을 써라.`;
 
   try {
     const payload = {
@@ -760,46 +761,59 @@ async function generateRecommendationReason(book, scoreData, childProfile, airta
 
     if (!response.ok) {
       debugLog('[WHY] responses non-200:', response.status, JSON.stringify(data));
-      return { text: generateRuleBasedReason(book, scoreData, childProfile, explicitInterests, airtableBooks), source: `rule_openai_${response.status}` };
+      return { text: generateRuleBasedReason(book, scoreData, childProfile, explicitInterests, airtableBooks, recType), source: `rule_openai_${response.status}` };
     }
 
     const text = extractResponseText(data);
     if (!text) {
       debugLog('[WHY] empty ai output', JSON.stringify(data));
-      return { text: generateRuleBasedReason(book, scoreData, childProfile, explicitInterests, airtableBooks), source: 'rule_empty_ai' };
+      return { text: generateRuleBasedReason(book, scoreData, childProfile, explicitInterests, airtableBooks, recType), source: 'rule_empty_ai' };
     }
 
-    const banned = ['도움이 됩니다', '성장을 돕습니다', '배울 수 있습니다'];
+    const banned = ['도움이 됩니다', '성장을 돕습니다', '배울 수 있습니다', '발달에 좋은', '교육적', '상상력을 키', '꼭 읽어보세요', '강력 추천'];
     const tooShort = text.length < 40;
     const hasBanned = banned.some((p) => text.includes(p));
 
     if (tooShort || hasBanned) {
-      return { text: generateRuleBasedReason(book, scoreData, childProfile, explicitInterests, airtableBooks), source: 'rule_guard' };
+      return { text: generateRuleBasedReason(book, scoreData, childProfile, explicitInterests, airtableBooks, recType), source: 'rule_guard' };
     }
 
     return { text, source: 'ai' };
   } catch (error) {
     debugLog('[WHY] openai exception:', error?.message || error);
-    return { text: generateRuleBasedReason(book, scoreData, childProfile, explicitInterests, airtableBooks), source: 'rule_exception' };
+    return { text: generateRuleBasedReason(book, scoreData, childProfile, explicitInterests, airtableBooks, recType), source: 'rule_exception' };
   }
 }
 
-function generateRuleBasedReason(book, scoreData, childProfile, explicitInterests, airtableBooks) {
-  const reasons = [];
-
+function generateRuleBasedReason(book, scoreData, childProfile, explicitInterests, airtableBooks, recType) {
   const themes = extractThemesFromAladinBook(book, airtableBooks || []).themes;
   const matchedExplicit = (explicitInterests || []).filter(t => themes.includes(t));
+
   if (matchedExplicit.length) {
-    reasons.push(`요즘 관심사로 선택한 '${matchedExplicit.slice(0, 2).join(', ')}'와 잘 맞아요`);
+    return `직접 관심사로 고른 '${matchedExplicit.slice(0, 2).join(', ')}' 테마의 신간이에요.`;
   }
 
-  if (scoreData.breakdown.themePreference > 30) reasons.push('최근 선호 소재와 가까워요');
-  if (scoreData.breakdown.engagement > 10) reasons.push('집중/완독 반응이 좋았던 유형과 비슷해요');
-  if (scoreData.breakdown.comfort > 15) reasons.push('편안하게 읽기 좋은 톤이에요');
-  if (scoreData.evidence?.length > 0) reasons.push(scoreData.evidence[0]);
+  if (scoreData.evidence?.length) {
+    const e = scoreData.evidence[0];
+    return e
+      .replace(/(.+?) 테마 완독 (\d+)회/, '$1 주제 책을 최근 $2번 끝까지 읽었어요.')
+      .replace(/(.+?) 테마 집중 (\d+)회/, '$1 주제 책에서 집중력이 좋았어요.')
+      .replace(/(.+?) 테마 질문 많음 (\d+)회/, '$1 주제 책을 읽으며 질문을 많이 했어요.');
+  }
 
-  if (reasons.length === 0) return '아이의 발달 단계에 맞는 책입니다';
-  return reasons.join(', ') + '입니다.';
+  if (scoreData.breakdown.themePreference > 30 && themes.length > 0) {
+    return `좋아하는 '${themes.slice(0, 2).join(', ')}' 계열의 신간이에요.`;
+  }
+
+  if (recType === 'explore' && themes.length > 0) {
+    return `평소와 살짝 다른 '${themes[0]}' 분위기의 신간이에요.`;
+  }
+
+  if (themes.length > 0) {
+    return `'${themes.slice(0, 2).join(', ')}' 테마의 신간으로 선택했어요.`;
+  }
+
+  return '최근 읽기 패턴을 바탕으로 고른 신간이에요.';
 }
 
 // ============================================
@@ -1084,7 +1098,10 @@ module.exports = async (req, res) => {
       exploreBooks = exploreBooks.concat(refill);
     }
 
-    let finalList = [...safeBooks, ...exploreBooks].slice(0, topCount);
+    let finalList = [
+      ...safeBooks.map(x => ({ ...x, _recType: 'safe' })),
+      ...exploreBooks.map(x => ({ ...x, _recType: 'explore' }))
+    ].slice(0, topCount);
     if (forceRefresh) finalList = shuffleArray(finalList);
     debugLog('[NEW] split:', {
       safe: safeBooks.length,
@@ -1104,9 +1121,9 @@ module.exports = async (req, res) => {
         
         let why;
         if (childProfile.hasData) {
-          why = await generateRecommendationReason(item.book, item, childProfile, allBooks, explicitInterests);
+          why = await generateRecommendationReason(item.book, item, childProfile, allBooks, explicitInterests, item._recType);
         } else {
-          why = { text: generateRuleBasedReason(item.book, item, childProfile, explicitInterests, allBooks), source: 'rule_no_data' };
+          why = { text: generateRuleBasedReason(item.book, item, childProfile, explicitInterests, allBooks, item._recType), source: 'rule_no_data' };
         }
 
         return {
