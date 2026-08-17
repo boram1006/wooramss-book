@@ -819,10 +819,31 @@ async function generateRecommendationReasonsBatch(items, childProfile, airtableB
     };
   });
 
-  const fallbackResults = (source) => new Map(entries.map(entry => [entry.key, {
-    text: entry.fallbackText,
-    source
-  }]));
+  const attachDiagnostics = (results, diagnostics) => {
+    results.diagnostics = diagnostics;
+    return results;
+  };
+  const fallbackResults = (source, diagnostics = null) => attachDiagnostics(
+    new Map(entries.map(entry => [entry.key, {
+      text: entry.fallbackText,
+      source
+    }])),
+    diagnostics
+  );
+  const responseDiagnostics = (response, data, attempt) => ({
+    status: response.status,
+    attempt,
+    errorType: data?.error?.type || null,
+    errorCode: data?.error?.code || null,
+    requestId: response.headers.get('x-request-id') || null,
+    retryAfter: response.headers.get('retry-after') || null,
+    limitRequests: response.headers.get('x-ratelimit-limit-requests') || null,
+    remainingRequests: response.headers.get('x-ratelimit-remaining-requests') || null,
+    resetRequests: response.headers.get('x-ratelimit-reset-requests') || null,
+    limitTokens: response.headers.get('x-ratelimit-limit-tokens') || null,
+    remainingTokens: response.headers.get('x-ratelimit-remaining-tokens') || null,
+    resetTokens: response.headers.get('x-ratelimit-reset-tokens') || null
+  });
 
   if (!childProfile.hasData) return fallbackResults('rule_no_data_enriched');
   if (!OPENAI_API_KEY) return fallbackResults('rule_no_key_enriched');
@@ -849,6 +870,7 @@ async function generateRecommendationReasonsBatch(items, childProfile, airtableB
     additionalProperties: false
   };
   const banned = ['도움이 됩니다', '성장을 돕습니다', '배울 수 있습니다', '발달에 좋은', '교육적', '상상력을 키', '꼭 읽어보세요', '강력 추천'];
+  let lastDiagnostics = null;
 
   for (let attempt = 1; attempt <= 3; attempt += 1) {
     try {
@@ -878,15 +900,16 @@ async function generateRecommendationReasonsBatch(items, childProfile, airtableB
         })
       });
       const data = await response.json();
+      lastDiagnostics = responseDiagnostics(response, data, attempt);
 
       if (!response.ok) {
-        debugLog('[WHY-BATCH] non-200:', response.status, JSON.stringify(data));
+        debugLog('[WHY-BATCH] non-200:', JSON.stringify(lastDiagnostics));
         if ((response.status === 429 || response.status >= 500) && attempt < 3) {
           const retryAfter = Number.parseInt(response.headers.get('retry-after') || '', 10);
           await new Promise(resolve => setTimeout(resolve, Number.isFinite(retryAfter) ? Math.min(retryAfter * 1000, 8000) : attempt * 2000));
           continue;
         }
-        return fallbackResults(`rule_openai_${response.status}_enriched`);
+        return fallbackResults(`rule_openai_${response.status}_enriched`, lastDiagnostics);
       }
 
       const outputText = extractResponseText(data);
@@ -900,18 +923,24 @@ async function generateRecommendationReasonsBatch(items, childProfile, airtableB
           ? { text: entry.fallbackText, source: 'rule_batch_guard_enriched' }
           : { text, source: 'ai_batch' });
       }
-      return results;
+      return attachDiagnostics(results, lastDiagnostics);
     } catch (error) {
       debugLog('[WHY-BATCH] exception:', error?.message || error);
+      lastDiagnostics = {
+        status: null,
+        attempt,
+        errorType: error?.name || 'Error',
+        errorCode: null
+      };
       if (attempt < 3) {
         await new Promise(resolve => setTimeout(resolve, attempt * 2000));
         continue;
       }
-      return fallbackResults('rule_batch_exception_enriched');
+      return fallbackResults('rule_batch_exception_enriched', lastDiagnostics);
     }
   }
 
-  return fallbackResults('rule_batch_exhausted_enriched');
+  return fallbackResults('rule_batch_exhausted_enriched', lastDiagnostics);
 }
 
 function generateRuleBasedReason(book, scoreData, childProfile, explicitInterests, airtableBooks, recType) {
@@ -1291,7 +1320,10 @@ module.exports = async (req, res) => {
         fetchedUniqueCount: uniqueBooks.length,
         candidatesCount: filteredBooks.length,
         scoredCount: scoredBooks.length,
-        topCount
+        topCount,
+        ...(String(req.query.debug || '') === '1'
+          ? { openai: generatedReasons.diagnostics || null }
+          : {})
       },
       childProfile: {
         hasData: childProfile.hasData,
