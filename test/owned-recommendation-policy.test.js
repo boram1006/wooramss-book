@@ -1,6 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const {
+  cleanOwnedFallbackDescription,
   hasStrongPersonalEvidence,
   isAgeEligible,
   resolveBookThemes
@@ -44,6 +45,22 @@ test('도전이 제목의 핵심이면 부차적인 과학보다 용기·도전�
     '과학·탐구,동물·생명'
   ));
   assert.equal(themes[0], '용기·도전');
+});
+
+test('여행이 제목의 핵심이면 부차적인 음식보다 모험·탐험을 앞세운다', () => {
+  const themes = resolveBookThemes(book(
+    '아슬아슬한 여행',
+    '일상의 작은 모험을 그린 그림책이다.',
+    '음식·요리,과학·탐구,모험·탐험'
+  ));
+  assert.equal(themes[0], '모험·탐험');
+});
+
+test('보유 도서 소개 조각을 폴백에 쓸 수 있는 문장으로 정리한다', () => {
+  assert.equal(
+    cleanOwnedFallbackDescription('무엇보다도 재미있는 것은, 책에 구멍이 뚫려 있다는 것.'),
+    '책에 구멍이 뚫려 있다는 점이 눈에 띄어요.'
+  );
 });
 
 test('완독 한 번만으로 강한 취향 근거를 만들지 않는다', () => {

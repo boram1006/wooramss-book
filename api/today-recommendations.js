@@ -4,6 +4,7 @@
 const { createClient } = require('@supabase/supabase-js');
 const { normalizeThemes, inferThemes } = require('../lib/theme-taxonomy');
 const {
+  cleanOwnedFallbackDescription,
   hasStrongPersonalEvidence,
   isAgeEligible,
   parseAgeRange,
@@ -743,7 +744,7 @@ async function generateRecommendationReasonsBatch(items, childProfile, explicitI
     const strongEvidence = hasStrongPersonalEvidence(item.evidence);
     const fallbackText = buildFallbackRecommendationReason({
       title: item.book.fields['제목'],
-      description: item.book.fields['설명'],
+      description: cleanOwnedFallbackDescription(item.book.fields['설명']),
       ruleReasons,
       themes,
       recType: item._recType,
