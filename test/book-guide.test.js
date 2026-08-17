@@ -6,6 +6,7 @@ const {
   generateBookGuide,
   generateBookGuides,
   sanitizeGuide,
+  selectInteractionStrategy,
   SYSTEM_PROMPT
 } = require('../lib/book-guide');
 
@@ -39,11 +40,12 @@ test('가이드 생성 스키마에는 추천용 테마가 들어가지 않는�
   });
 
   assert.equal(guide.ageRange, '3-5세');
-  assert.equal(guide.interactionStrategy, '그림 단서 찾기');
+  assert.equal(guide.interactionStrategy, '순서 다시 말하기');
   assert.match(guide.parentGuide, /구름의 모양/);
   assert.equal('themes' in guide, false);
   assert.equal('themes' in requestBody.text.format.schema.properties.guides.items.properties, false);
-  assert.deepEqual(requestBody.text.format.schema.properties.guides.items.properties.interactionStrategy.enum, INTERACTION_STRATEGIES);
+  assert.equal('interactionStrategy' in requestBody.text.format.schema.properties.guides.items.properties, false);
+  assert.match(requestBody.input[1].content, /필수 상호작용 전략: 순서 다시 말하기/);
   assert.match(requestBody.input[1].content, /39개월/);
   assert.match(SYSTEM_PROMPT, /테마·관심사·추천 분류는 생성하거나 참고하지 않습니다/);
 });
@@ -84,9 +86,15 @@ test('프롬프트는 열린 질문과 안전한 놀이 형식을 강제한다',
 
 test('프롬프트는 책에 맞는 전략을 고르고 공통 반응 문구를 금지한다', () => {
   assert.equal(INTERACTION_STRATEGIES.length, 8);
-  assert.match(SYSTEM_PROMPT, /같은 전략을 세 권 연속 쓰지 않습니다/);
+  assert.match(SYSTEM_PROMPT, /전략을 다시 선택하거나 바꾸지 않습니다/);
   assert.match(SYSTEM_PROMPT, /모든 책에 통용되는 '잠깐 기다리기'/);
-  assert.match(SYSTEM_PROMPT, /선택한 전략을 실제로 실행/);
+  assert.match(SYSTEM_PROMPT, /필수 전략을 실제로 실행/);
+});
+
+test('명확한 책 단서로 상호작용 전략을 먼저 결정한다', () => {
+  assert.equal(selectInteractionStrategy({ title: '손 손 손', description: '손이 어떻게 생기고 움직이고 기능하는지 놀이처럼 보여 준다.' }), '낱말과 개념 익히기');
+  assert.equal(selectInteractionStrategy({ title: '그림책 만들기', description: '책 한 권을 완성하도록 시작부터 마무리까지 전 과정을 알려 준다.' }), '순서 다시 말하기');
+  assert.equal(selectInteractionStrategy({ title: '사뿐사뿐 따삐르', description: '의성어와 의태어가 풍부한 정글 그림책이다.' }), '소리와 말놀이');
 });
 
 test('공통 기다리기·말 확장 반응은 저장 가능한 결과로 인정하지 않는다', async () => {
@@ -131,8 +139,8 @@ test('한 질문 안의 선택지와 복수 질문을 저장 전에 차단한다
     parentGuide: '함께 볼 점: 반복되는 소리를 들어보세요. 질문: ① 어떤 소리가 들려? ② 소리를 크게 혹은 작게 내볼래? 반응: 반복구를 손뼉으로 받아 같은 박자를 이어 가세요.',
     activities: '준비물: 종이, 크레용. 방법: ① 소리를 그려요. ② 박자를 만들어요.'
   };
-  assert.deepEqual(assessGuideQuality(base), ['question_contains_choices', 'question_not_open']);
-  assert.deepEqual(assessGuideQuality({ ...base, parentGuide: base.parentGuide.replace('어떤 소리가 들려?', '어떤 소리가 들려? 어디서 들려?').replace('크게 혹은 작게 내볼래?', '소리를 바꾸면 어떻게 들릴까?') }), ['multiple_questions_in_one']);
+  assert.deepEqual(assessGuideQuality(base), ['question_contains_choices', 'question_not_open', 'question_not_atomic']);
+  assert.deepEqual(assessGuideQuality({ ...base, parentGuide: base.parentGuide.replace('어떤 소리가 들려?', '어떤 소리가 들려? 어디서 들려?').replace('크게 혹은 작게 내볼래?', '소리를 바꾸면 어떻게 들릴까?') }), ['multiple_questions_in_one', 'question_not_open']);
 });
 
 test('책과 무관한 공통 반응 도입과 지나치게 긴 가이드를 차단한다', () => {
@@ -143,5 +151,5 @@ test('책과 무관한 공통 반응 도입과 지나치게 긴 가이드를 차
     activities: '준비물: 종이, 크레용. 방법: ① 우산을 그려요. ② 색을 골라요.'
   };
   assert.deepEqual(assessGuideQuality(commonOpening), ['generic_response_opening']);
-  assert.deepEqual(assessGuideQuality({ ...commonOpening, parentGuide: `${commonOpening.parentGuide}${' 긴 문장'.repeat(40)}` }), ['generic_response_opening', 'parent_guide_too_long']);
+  assert.deepEqual(assessGuideQuality({ ...commonOpening, parentGuide: `${commonOpening.parentGuide}${' 긴 문장'.repeat(40)}` }), ['generic_response_opening', 'response_not_actionable', 'parent_guide_too_long']);
 });
