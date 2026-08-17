@@ -384,6 +384,7 @@
             READING_LOG_TABLE: 'ReadingLog'
         };
         const RECOMMENDATION_CACHE_VERSION = 3;
+        const OWNED_RECOMMENDATION_CACHE_VERSION = 2;
 
         function computeAgeMonthsFromBirthdate(birthDateString) {
             if (!birthDateString) return null;
@@ -1236,8 +1237,10 @@
                     try {
                         const cached = localStorage.getItem('todayRecommendations');
                         if (cached) {
-                            const { date, books } = JSON.parse(cached);
-                            if (date === today && books.length > 0) {
+                            const { date, books, version, ageMonths: cachedAgeMonths, expiresAt } = JSON.parse(cached);
+                            const ageMonthsMatch = effectiveAgeMonths === '' || cachedAgeMonths === effectiveAgeMonths;
+                            const cacheFresh = expiresAt ? Date.now() < expiresAt : date === today;
+                            if (version === OWNED_RECOMMENDATION_CACHE_VERSION && cacheFresh && books.length > 0 && ageMonthsMatch) {
                                 console.log('🎯 오늘의 추천 캐시 사용:', books.length, '권');
                                 setRecommendations(books);
                                 return books;
@@ -1283,14 +1286,24 @@
                         // Airtable 책 데이터와 매칭
                         const matchedBooks = data.books.map(apiBook => {
                             const book = books.find(b => b.id === apiBook.id);
-                            return book ? { book, score: apiBook.score, recommendationReason: apiBook.recommendationReason } : null;
+                            return book ? {
+                                book,
+                                score: apiBook.score,
+                                recommendationReason: apiBook.recommendationReason,
+                                recommendationSource: apiBook.recommendationSource,
+                                evidence: apiBook.evidence
+                            } : null;
                         }).filter(Boolean);
                         
                         // localStorage에 저장
                         try {
+                            const allReasonsGenerated = matchedBooks.every(item => item.recommendationSource === 'ai_batch');
                             localStorage.setItem('todayRecommendations', JSON.stringify({
+                                version: OWNED_RECOMMENDATION_CACHE_VERSION,
                                 date: today,
-                                books: matchedBooks
+                                books: matchedBooks,
+                                ageMonths: effectiveAgeMonths,
+                                expiresAt: allReasonsGenerated ? null : Date.now() + 5 * 60 * 1000
                             }));
                             console.log('🎯 오늘의 추천 캐시 저장:', matchedBooks.length, '권');
                         } catch (e) {
@@ -1662,7 +1675,8 @@
                                                         }}>
                                                             <img 
                                                                 src={item.book.fields['표지이미지']} 
-                                                                alt={item.book.fields['제목']}
+                                                                alt=""
+                                                                aria-hidden="true"
                                                                 style={{
                                                                     width: '100%',
                                                                     height: '100%',
