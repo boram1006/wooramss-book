@@ -18,7 +18,7 @@ function generatedGuide(key, overrides = {}) {
     focus: '구름의 모양과 페이지마다 달라지는 위치를 함께 살펴보세요.',
     question1: '구름에서 어떤 모양이 보여?',
     question2: '다음 장에서는 구름이 어디로 갈까?',
-    response: '아이가 짚은 구름의 모양을 함께 따라 그린 뒤 다음 장의 구름과 달라진 점을 비교해 보세요.',
+    response: '아이가 짚은 『구름』의 모양을 함께 따라 그린 뒤 다음 장의 구름과 달라진 점을 비교해 보세요.',
     activities: '준비물: 종이, 크레용. 방법: ① 구름 모양을 골라요. ② 몸으로 움직여요. ③ 이야기를 들려줘요.',
     ...overrides
   };
@@ -58,8 +58,8 @@ test('여러 책을 한 번 호출하고 입력 순서로 되돌린다', async (
     fetchImpl: async () => {
       calls += 1;
       return jsonResponse({ output_text: JSON.stringify({ guides: [
-        generatedGuide('222', { bookAnchor: '둘째 책', focus: '둘째 책의 표지와 실제로 보이는 그림 요소를 차례로 살펴보세요.', response: '둘째 책의 표지에서 아이가 짚은 부분을 따라 앞뒤 그림과 비교해 보세요.' }),
-        generatedGuide('111', { bookAnchor: '첫 책', focus: '첫 책의 표지와 실제로 보이는 그림 요소를 차례로 살펴보세요.', response: '첫 책의 표지에서 아이가 짚은 부분을 따라 앞뒤 그림과 비교해 보세요.' })
+        generatedGuide('222', { bookAnchor: '둘째 책', focus: '둘째 책의 표지와 실제로 보이는 그림 요소를 차례로 살펴보세요.', response: '『둘째 책』의 표지에서 아이가 짚은 부분을 따라 앞뒤 그림과 비교해 보세요.' }),
+        generatedGuide('111', { bookAnchor: '첫 책', focus: '첫 책의 표지와 실제로 보이는 그림 요소를 차례로 살펴보세요.', response: '『첫 책』의 표지에서 아이가 짚은 부분을 따라 앞뒤 그림과 비교해 보세요.' })
       ] }) });
     }
   });
@@ -110,14 +110,14 @@ test('품질 탈락 책만 사유를 붙여 자동 재작성한다', async () =>
       if (calls === 1) {
         return jsonResponse({ output_text: JSON.stringify({ guides: [generatedGuide('retry-1', {
           bookAnchor: '소리 책',
-          response: '소리 책의 리듬을 손뼉으로 받아 빠르기를 바꾸어 이어가 보세요.',
+          response: '『소리 책』의 리듬을 손뼉으로 받아 빠르기를 바꾸어 이어가 보세요.',
           question2: '소리를 크게 또는 작게 해볼래?'
         })] }) });
       }
       retryInput = body.input[1].content;
       return jsonResponse({ output_text: JSON.stringify({ guides: [generatedGuide('retry-1', {
         bookAnchor: '소리 책',
-        response: '소리 책의 리듬을 손뼉으로 받아 빠르기를 바꾸어 이어가 보세요.',
+        response: '『소리 책』의 리듬을 손뼉으로 받아 빠르기를 바꾸어 이어가 보세요.',
         question2: '어떤 새 소리를 만들고 싶어?'
       })] }) });
     }
@@ -145,7 +145,7 @@ test('비저장 파일럿은 탈락한 원문과 품질 사유를 진단할 수 
     includeDiagnostics: true,
     fetchImpl: async () => jsonResponse({ output_text: JSON.stringify({ guides: [generatedGuide('9783', {
       bookAnchor: '진단 책',
-      response: '아이의 답을 듣고 진단 책에서 잠깐 기다렸다가 한두 단어를 덧붙여 되돌려 주세요.'
+      response: '아이의 답을 듣고 『진단 책』에서 잠깐 기다렸다가 한두 단어를 덧붙여 되돌려 주세요.'
     })] }) })
   });
 
@@ -194,7 +194,18 @@ test('책 고유어가 반응에 없거나 공통어이면 차단한다', () => 
     parentGuide: '함께 볼 점: 우산의 색과 위치를 살펴보세요. 질문: ① 어떤 우산이 보여? ② 그 우산은 어디에 있어? 반응: 앞뒤 그림에서 우산의 위치 변화를 비교해 보세요.',
     activities: '준비물: 종이, 크레용. 방법: ① 우산을 그려요. ② 색을 골라요.'
   };
-  assert.deepEqual(assessGuideQuality(base), ['response_missing_book_anchor']);
-  assert.deepEqual(assessGuideQuality({ ...base, bookAnchor: '그림' }), ['invalid_book_anchor']);
-  assert.deepEqual(assessGuideQuality({ ...base, parentGuide: base.parentGuide.replace('앞뒤 그림에서', '노란 우산이 나온 앞뒤 그림에서') }), []);
+  assert.deepEqual(assessGuideQuality(base), ['response_missing_book_anchor', 'unquoted_book_anchor']);
+  assert.deepEqual(assessGuideQuality({ ...base, bookAnchor: '그림' }), ['invalid_book_anchor', 'unquoted_book_anchor']);
+  assert.deepEqual(assessGuideQuality({ ...base, parentGuide: base.parentGuide.replace('앞뒤 그림에서', '『노란 우산』이 나온 앞뒤 그림에서') }), []);
+});
+
+test('어색한 고유어 조사와 중복 종결을 차단한다', () => {
+  const base = {
+    ageRange: '3-5세',
+    interactionStrategy: '예측하고 확인하기',
+    bookAnchor: '호랑이',
+    parentGuide: '함께 볼 점: 다음 사건의 단서를 살펴보세요. 질문: ① 다음에는 무슨 일이 생길까? ② 지금 어떤 단서가 보여? 반응: 다음 장면을 펼쳐 『호랑이』에서 예상과 실제를 비교해 보세요 해 보세요.',
+    activities: '준비물: 종이, 크레용. 방법: ① 단서를 그려요. ② 다음 장면을 만들어요.'
+  };
+  assert.deepEqual(assessGuideQuality(base), ['awkward_book_anchor_grammar', 'duplicated_response_ending']);
 });
