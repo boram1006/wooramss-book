@@ -69,13 +69,13 @@ function debugLog(...args) {
         author: book.author,
         publisher: book.publisher,
         description: book.description
-      })), { apiKey: OPENAI_API_KEY, childAgeMonths: 39 });
+      })), { apiKey: OPENAI_API_KEY, childAgeMonths: 39, includeDiagnostics: true });
       const guideById = new Map(guides.map(guide => [guide.key, guide]));
       return res.status(200).json({
         saved: false,
         samples: orderedBooks.map(book => {
           const guide = guideById.get(book.id);
-          return { title: book.title, description: book.description, guide, issues: assessGuideQuality(guide) };
+          return { title: book.title, description: book.description, guide, issues: guide?.qualityIssues || assessGuideQuality(guide) };
         })
       });
     }

@@ -100,6 +100,19 @@ test('공통 기다리기·말 확장 반응은 저장 가능한 결과로 인�
   assert.deepEqual(guide, { ageRange: '', parentGuide: '', activities: '' });
 });
 
+test('비저장 파일럿은 탈락한 원문과 품질 사유를 진단할 수 있다', async () => {
+  const guide = await generateBookGuide({ isbn: '9783', title: '진단 책' }, {
+    apiKey: 'test-key',
+    includeDiagnostics: true,
+    fetchImpl: async () => jsonResponse({ output_text: JSON.stringify({ guides: [generatedGuide('9783', {
+      response: '아이가 말하면 잠깐 기다렸다가 한두 단어를 덧붙여 되돌려 주세요.'
+    })] }) })
+  });
+
+  assert.match(guide.parentGuide, /잠깐 기다렸다가/);
+  assert.deepEqual(guide.qualityIssues, ['generic_response', 'generic_response_opening']);
+});
+
 test('품질 검사는 형식과 공통 반응 문구를 구분한다', () => {
   const valid = {
     ageRange: '3-5세',
