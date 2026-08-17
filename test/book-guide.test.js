@@ -14,7 +14,7 @@ function generatedGuide(key, overrides = {}) {
   return {
     key,
     ageRange: '3-5세',
-    interactionStrategy: '그림 단서 찾기',
+    bookAnchor: '구름',
     focus: '구름의 모양과 페이지마다 달라지는 위치를 함께 살펴보세요.',
     question1: '구름에서 어떤 모양이 보여?',
     question2: '다음 장에서는 구름이 어디로 갈까?',
@@ -45,6 +45,7 @@ test('가이드 생성 스키마에는 추천용 테마가 들어가지 않는�
   assert.equal('themes' in guide, false);
   assert.equal('themes' in requestBody.text.format.schema.properties.guides.items.properties, false);
   assert.equal('interactionStrategy' in requestBody.text.format.schema.properties.guides.items.properties, false);
+  assert.equal('bookAnchor' in requestBody.text.format.schema.properties.guides.items.properties, true);
   assert.match(requestBody.input[1].content, /필수 상호작용 전략: 순서 다시 말하기/);
   assert.match(requestBody.input[1].content, /39개월/);
   assert.match(SYSTEM_PROMPT, /테마·관심사·추천 분류는 생성하거나 참고하지 않습니다/);
@@ -57,14 +58,14 @@ test('여러 책을 한 번 호출하고 입력 순서로 되돌린다', async (
     fetchImpl: async () => {
       calls += 1;
       return jsonResponse({ output_text: JSON.stringify({ guides: [
-        generatedGuide('222', { focus: '둘째 책의 표지와 실제로 보이는 그림 요소를 차례로 살펴보세요.' }),
-        generatedGuide('111', { focus: '첫째 책의 표지와 실제로 보이는 그림 요소를 차례로 살펴보세요.' })
+        generatedGuide('222', { bookAnchor: '둘째 책', focus: '둘째 책의 표지와 실제로 보이는 그림 요소를 차례로 살펴보세요.', response: '둘째 책의 표지에서 아이가 짚은 부분을 따라 앞뒤 그림과 비교해 보세요.' }),
+        generatedGuide('111', { bookAnchor: '첫 책', focus: '첫 책의 표지와 실제로 보이는 그림 요소를 차례로 살펴보세요.', response: '첫 책의 표지에서 아이가 짚은 부분을 따라 앞뒤 그림과 비교해 보세요.' })
       ] }) });
     }
   });
   assert.equal(calls, 1);
   assert.deepEqual(guides.map(guide => guide.key), ['111', '222']);
-  assert.match(guides[0].parentGuide, /첫째 책/);
+  assert.match(guides[0].parentGuide, /첫 책/);
 });
 
 test('API 키가 없으면 비어 있는 가이드를 반환한다', async () => {
@@ -108,11 +109,15 @@ test('품질 탈락 책만 사유를 붙여 자동 재작성한다', async () =>
       const body = JSON.parse(options.body);
       if (calls === 1) {
         return jsonResponse({ output_text: JSON.stringify({ guides: [generatedGuide('retry-1', {
+          bookAnchor: '소리 책',
+          response: '소리 책의 리듬을 손뼉으로 받아 빠르기를 바꾸어 이어가 보세요.',
           question2: '소리를 크게 또는 작게 해볼래?'
         })] }) });
       }
       retryInput = body.input[1].content;
       return jsonResponse({ output_text: JSON.stringify({ guides: [generatedGuide('retry-1', {
+        bookAnchor: '소리 책',
+        response: '소리 책의 리듬을 손뼉으로 받아 빠르기를 바꾸어 이어가 보세요.',
         question2: '어떤 새 소리를 만들고 싶어?'
       })] }) });
     }
@@ -139,7 +144,8 @@ test('비저장 파일럿은 탈락한 원문과 품질 사유를 진단할 수 
     apiKey: 'test-key',
     includeDiagnostics: true,
     fetchImpl: async () => jsonResponse({ output_text: JSON.stringify({ guides: [generatedGuide('9783', {
-      response: '아이가 말하면 잠깐 기다렸다가 한두 단어를 덧붙여 되돌려 주세요.'
+      bookAnchor: '진단 책',
+      response: '아이의 답을 듣고 진단 책에서 잠깐 기다렸다가 한두 단어를 덧붙여 되돌려 주세요.'
     })] }) })
   });
 
@@ -178,4 +184,17 @@ test('책과 무관한 공통 반응 도입과 지나치게 긴 가이드를 차
   };
   assert.deepEqual(assessGuideQuality(commonOpening), ['generic_response_opening']);
   assert.deepEqual(assessGuideQuality({ ...commonOpening, parentGuide: `${commonOpening.parentGuide}${' 긴 문장'.repeat(40)}` }), ['generic_response_opening', 'response_not_actionable', 'parent_guide_too_long']);
+});
+
+test('책 고유어가 반응에 없거나 공통어이면 차단한다', () => {
+  const base = {
+    ageRange: '3-5세',
+    interactionStrategy: '그림 단서 찾기',
+    bookAnchor: '노란 우산',
+    parentGuide: '함께 볼 점: 우산의 색과 위치를 살펴보세요. 질문: ① 어떤 우산이 보여? ② 그 우산은 어디에 있어? 반응: 앞뒤 그림에서 우산의 위치 변화를 비교해 보세요.',
+    activities: '준비물: 종이, 크레용. 방법: ① 우산을 그려요. ② 색을 골라요.'
+  };
+  assert.deepEqual(assessGuideQuality(base), ['response_missing_book_anchor']);
+  assert.deepEqual(assessGuideQuality({ ...base, bookAnchor: '그림' }), ['invalid_book_anchor']);
+  assert.deepEqual(assessGuideQuality({ ...base, parentGuide: base.parentGuide.replace('앞뒤 그림에서', '노란 우산이 나온 앞뒤 그림에서') }), []);
 });
