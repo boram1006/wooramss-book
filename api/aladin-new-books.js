@@ -4,7 +4,10 @@
 const { createClient } = require('@supabase/supabase-js');
 const { normalizeThemes, inferThemes } = require('../lib/theme-taxonomy');
 const { inferAladinThemes } = require('../lib/aladin-book-themes');
-const { buildFallbackRecommendationReason } = require('../lib/recommendation-reason');
+const {
+  buildFallbackRecommendationReason,
+  cleanGeneratedRecommendationReason
+} = require('../lib/recommendation-reason');
 const ALADIN_API_KEY = process.env.ALADIN_API_KEY || 'ttbcasey862231001';
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 const DEBUG_RECO = process.env.DEBUG_RECO === '1';
@@ -141,7 +144,7 @@ const CATEGORY_IDS = [
 const EXCLUDED_KEYWORDS = [
   '캐릭터', '스티커', '색칠', '만들기', '퍼즐', '카드',
   '세트', 'DVD', '교구', '블록',
-  '워크북', '문제집', '학습지',
+  '워크북', '문제집', '학습지', '빅북', '세이펜', '키링북',
 ];
 
 // ============================================
@@ -403,10 +406,14 @@ function extractThemesFromAladinBook(aladinBook, airtableBooks) {
 }
 
 // ============================================
-// 하드 필터링 (비활성화)
+// 세트·교구·학습 상품처럼 한 권의 그림책 추천에 맞지 않는 항목 제외
 // ============================================
 function hardFilterBooks(books) {
-  return books;
+  return (books || []).filter(book => {
+    const title = String(book?.title || '').toLowerCase();
+    return !EXCLUDED_KEYWORDS.some(keyword => title.includes(keyword.toLowerCase()))
+      && !/전\s*\d+\s*권/.test(title);
+  });
 }
 
 // ============================================
@@ -896,7 +903,7 @@ async function generateRecommendationReasonsBatch(items, childProfile, airtableB
       const generated = new Map((parsed.reasons || []).map(reason => [String(reason.key), String(reason.text || '').trim()]));
       const results = new Map();
       for (const entry of entries) {
-        const text = generated.get(entry.key) || '';
+        const text = cleanGeneratedRecommendationReason(generated.get(entry.key), entry.key);
         const invalid = text.length < 60 || banned.some(phrase => text.includes(phrase));
         results.set(entry.key, invalid
           ? { text: entry.fallbackText, source: 'rule_batch_guard_enriched' }
@@ -1131,7 +1138,7 @@ module.exports = async (req, res) => {
     const excludedSet = await fetchExcludedIsbns(supabase, userId);
 
     // 제외 목록 적용 (scoring 전에!)
-    const filteredBooks = uniqueBooks.filter(b => {
+    const filteredBooks = hardFilterBooks(uniqueBooks).filter(b => {
       const isbn = normIsbn(b.isbn13 || b.isbn);
       return isbn && !excludedSet.has(isbn);
     });

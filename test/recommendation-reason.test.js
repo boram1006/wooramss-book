@@ -1,6 +1,9 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { buildFallbackRecommendationReason } = require('../lib/recommendation-reason');
+const {
+  buildFallbackRecommendationReason,
+  cleanGeneratedRecommendationReason
+} = require('../lib/recommendation-reason');
 
 test('AI 추천 이유가 실패해도 책 고유 내용과 읽기 근거를 담은 두 문장을 만든다', () => {
   const reason = buildFallbackRecommendationReason({
@@ -71,4 +74,11 @@ test('책 제목의 받침에 맞는 목적격 조사를 사용하고 권수 소
 
   assert.match(reason, /『기사가 된 린다』를/);
   assert.doesNotMatch(reason, /9권/);
+});
+
+test('구조화 응답 text 앞에 모델이 반복한 key 번호를 제거한다', () => {
+  assert.equal(
+    cleanGeneratedRecommendationReason('3: 자연의 재료가 떡이 되는 과정을 따라가요.', '3'),
+    '자연의 재료가 떡이 되는 과정을 따라가요.'
+  );
 });
