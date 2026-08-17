@@ -3,6 +3,7 @@
 
 const { createClient } = require('@supabase/supabase-js');
 const { normalizeThemes, inferThemes } = require('../lib/theme-taxonomy');
+const { inferAladinThemes } = require('../lib/aladin-book-themes');
 const { buildFallbackRecommendationReason } = require('../lib/recommendation-reason');
 const ALADIN_API_KEY = process.env.ALADIN_API_KEY || 'ttbcasey862231001';
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
@@ -167,10 +168,7 @@ function buildThemeStats(allBooks) {
   const N = (allBooks || []).length || 1;
 
   for (const b of (allBooks || [])) {
-    const themes = (b?.fields?.['테마'] || '')
-      .split(',')
-      .map(normalizeTheme)
-      .filter(Boolean);
+    const themes = normalizeThemes(b?.fields?.['테마'], 8).map(normalizeTheme);
 
     const uniq = new Set(themes);
     for (const t of uniq) df.set(t, (df.get(t) || 0) + 1);
@@ -306,10 +304,7 @@ function analyzeChildProfile(readingLogs, allBooks) {
     const book = allBooks.find(b => b.id === log.fields['책']?.[0]);
     if (!book || !book.fields['테마']) return;
 
-    const themes = book.fields['테마']
-      .split(',')
-      .map(t => t.trim().toLowerCase())
-      .filter(Boolean);
+    const themes = normalizeThemes(book.fields['테마'], 8).map(normalizeTheme);
 
     const reaction = log.fields['아이반응'] || '';
     const completed = log.fields['완독여부'] || false;
@@ -383,8 +378,8 @@ function analyzeChildProfile(readingLogs, allBooks) {
 }
 
 // ============================================
-// (추가) 신간(알라딘) 테마 추출: DB(ISBN 매칭) 우선, 없으면 키워드 fallback
-// - 반환: { themes: string[], source: 'db' | 'keyword' | 'none' }
+// 신간 테마 추출: DB(ISBN 매칭) 우선, 없으면 문맥 규칙을 사용한다.
+// 인물 호칭 한 단어만으로 가족/친구 테마를 확정하지 않는다.
 // ============================================
 function extractThemesFromAladinBook(aladinBook, airtableBooks) {
   const rawIsbn = aladinBook?.isbn13 || aladinBook?.isbn || '';
@@ -399,36 +394,12 @@ function extractThemesFromAladinBook(aladinBook, airtableBooks) {
 
     const dbThemesRaw = matched?.fields?.['테마'];
     if (dbThemesRaw) {
-      const themes = String(dbThemesRaw)
-        .split(',')
-        .map((t) => t.trim().toLowerCase())
-        .filter(Boolean);
-      if (themes.length) return { themes, source: 'db' };
+      const themes = normalizeThemes(dbThemesRaw, 3).map(normalizeTheme);
+      if (themes.length) return { themes, source: 'db', confidence: 'high' };
     }
   }
 
-  // 2) fallback: 제목/설명 기반 키워드 테마 추출(지금 로직을 한 곳으로 모음)
-  const title = (aladinBook?.title || '').toLowerCase();
-  const description = (aladinBook?.description || '').toLowerCase();
-    const fullText = `${title} ${description}`;
-
-  // ※ 필요하면 여기 키워드만 계속 확장하면 됨
-  const themeKeywords = {
-    '동물': ['동물', '강아지', '고양이', '곰', '토끼', '펭귄', '사자', '호랑이', '여우', '늑대'],
-    '가족': ['가족', '엄마', '아빠', '할머니', '할아버지', '동생', '형', '누나', '오빠'],
-    '친구': ['친구', '우정', '함께', '같이', '사이좋게'],
-    '자연': ['자연', '숲', '바다', '하늘', '나무', '꽃', '비', '눈', '구름', '산'],
-    '일상': ['일상', '하루', '아침', '저녁', '잠', '밥', '학교', '유치원', '놀이', '산책'],
-    '유머': ['웃음', '재미', '즐거', '행복', '엉뚱', '우스', '코믹']
-  };
-
-  const themes = [];
-  for (const [theme, keywords] of Object.entries(themeKeywords)) {
-    if (keywords.some((kw) => fullText.includes(kw))) themes.push(theme);
-  }
-
-  if (themes.length) return { themes: [...new Set(themes)], source: 'keyword' };
-  return { themes: [], source: 'none' };
+  return inferAladinThemes(aladinBook, 3);
 }
 
 // ============================================
@@ -794,6 +765,10 @@ async function generateRecommendationReasonsBatch(items, childProfile, airtableB
       explicitInterests,
       item._recType
     );
+    const hasPersonalEvidence = Boolean(
+      item.evidence?.length
+      || (item.breakdown?.themePreference >= 30 && themes.length > 0)
+    );
     const fallbackText = buildFallbackRecommendationReason({
       title: item.book.title,
       description: item.book.description,
@@ -806,7 +781,8 @@ async function generateRecommendationReasonsBatch(items, childProfile, airtableB
         item._recType
       )],
       themes,
-      recType: item._recType
+      recType: item._recType,
+      hasPersonalEvidence
     });
     return {
       key: String(index),
@@ -815,6 +791,7 @@ async function generateRecommendationReasonsBatch(items, childProfile, airtableB
       themes,
       recommendationType: item._recType === 'explore' ? '탐색' : '익숙한 취향',
       ruleReasons,
+      hasPersonalEvidence,
       fallbackText
     };
   });
@@ -904,7 +881,9 @@ async function generateRecommendationReasonsBatch(items, childProfile, airtableB
 
       if (!response.ok) {
         debugLog('[WHY-BATCH] non-200:', JSON.stringify(lastDiagnostics));
-        if ((response.status === 429 || response.status >= 500) && attempt < 3) {
+        const nonRetryableQuotaError = data?.error?.code === 'credit_balance_exhausted'
+          || data?.error?.type === 'insufficient_quota';
+        if (!nonRetryableQuotaError && (response.status === 429 || response.status >= 500) && attempt < 3) {
           const retryAfter = Number.parseInt(response.headers.get('retry-after') || '', 10);
           await new Promise(resolve => setTimeout(resolve, Number.isFinite(retryAfter) ? Math.min(retryAfter * 1000, 8000) : attempt * 2000));
           continue;
@@ -1306,6 +1285,7 @@ module.exports = async (req, res) => {
           why: why.text,
           recommendationReason: why.text,
           recommendationSource: why.source,
+          themes: item._themes || [],
           evidence: item.evidence,
           link: item.book.link
         };
