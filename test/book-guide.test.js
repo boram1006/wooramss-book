@@ -209,3 +209,15 @@ test('어색한 고유어 조사와 중복 종결을 차단한다', () => {
   };
   assert.deepEqual(assessGuideQuality(base), ['awkward_book_anchor_grammar', 'duplicated_response_ending']);
 });
+
+test('고유어 받침 조사와 메타·지시형 반응을 차단한다', () => {
+  const base = {
+    ageRange: '3-5세',
+    interactionStrategy: '예측하고 확인하기',
+    bookAnchor: '달',
+    parentGuide: '함께 볼 점: 다음 사건의 단서를 살펴보세요. 질문: ① 다음에는 무슨 일이 생길까? ② 지금 어떤 단서가 보여? 반응: 『달』가 나온 다음 장면에서 예상과 실제를 비교한다고 말해 보세요.',
+    activities: '준비물: 종이, 크레용. 방법: ① 단서를 그려요. ② 다음 장면을 만들어요.'
+  };
+  assert.deepEqual(assessGuideQuality(base), ['wrong_book_anchor_particle', 'meta_response_wording']);
+  assert.deepEqual(assessGuideQuality({ ...base, parentGuide: base.parentGuide.replace('『달』가 나온 다음 장면에서 예상과 실제를 비교한다고 말해', '『달』이 나온 장면을 예측하게 하고 다음 장면과 비교해') }), ['directive_response']);
+});
