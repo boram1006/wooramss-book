@@ -3252,7 +3252,7 @@
                 setResults([]);
 
                 try {
-                    const response = await fetch('/api/recognize-book-spines', {
+                    const response = await fetch('/api/aladin-search', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({ images: images.map(image => image.dataUrl) })
@@ -3322,7 +3322,7 @@
                 setRegistering(true);
                 setError('');
                 try {
-                    const response = await fetch('/api/register-read-books', {
+                    const response = await fetch('/api/reading-log', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({
