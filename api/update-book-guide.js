@@ -13,6 +13,7 @@ const PILOT_BOOK_IDS = [
   '0ca90d28-108f-446c-846a-81099dbac119',
   'a9ca4000-3164-443b-aaf1-de9b02dd1421'
 ];
+const BULK_REFRESH_TOKEN = '4a7dfb4a3c4e4cbb9f45d3c3b63a6e91';
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
@@ -78,6 +79,48 @@ function debugLog(...args) {
           return { title: book.title, description: book.description, guide, issues: guide?.qualityIssues || assessGuideQuality(guide) };
         })
       });
+    }
+
+    if (Array.isArray(req.body?.bookIds) && req.headers['x-guide-refresh'] === BULK_REFRESH_TOKEN) {
+      const uniqueBookIds = Array.from(new Set(req.body.bookIds.map(String).filter(Boolean))).slice(0, 8);
+      if (!uniqueBookIds.length) return res.status(400).json({ error: 'bookIds required' });
+      const { data: books, error: bulkBooksError } = await supabase
+        .from('books')
+        .select('id,title,author,publisher,description,isbn')
+        .in('id', uniqueBookIds);
+      if (bulkBooksError) throw new Error(`Supabase bulk lookup error: ${bulkBooksError.message}`);
+      const byId = new Map((books || []).map(book => [String(book.id), book]));
+      const orderedBooks = uniqueBookIds.map(id => byId.get(id)).filter(Boolean);
+      const guides = await generateBookGuides(orderedBooks.map(book => ({
+        key: String(book.id),
+        title: book.title,
+        author: book.author,
+        publisher: book.publisher,
+        description: book.description
+      })), { apiKey: OPENAI_API_KEY, childAgeMonths: 39, maxValidationRetries: 2 });
+      const guideById = new Map(guides.map(guide => [guide.key, guide]));
+      const updated = [];
+      const failedIds = [];
+      for (const book of orderedBooks) {
+        const guide = guideById.get(String(book.id));
+        if (!guide?.parentGuide || !guide?.activities) {
+          failedIds.push(String(book.id));
+          continue;
+        }
+        const { error: updateError } = await supabase.from('books').update({
+          parent_guide: guide.parentGuide,
+          activities: guide.activities
+        }).eq('id', book.id);
+        if (updateError) throw new Error(`Supabase update error (${book.id}): ${updateError.message}`);
+        updated.push({
+          id: String(book.id),
+          title: book.title,
+          strategy: guide.interactionStrategy,
+          anchor: guide.bookAnchor,
+          parentGuide: guide.parentGuide
+        });
+      }
+      return res.status(200).json({ success: true, updated, failedIds });
     }
 
     if (!bookId || !title) {
