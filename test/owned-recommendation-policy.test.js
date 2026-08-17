@@ -1,8 +1,10 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const {
+  buildReadingSignal,
   cleanOwnedFallbackDescription,
   hasStrongPersonalEvidence,
+  hasRecommendationAuditLanguage,
   isAgeEligible,
   resolveBookThemes
 } = require('../lib/owned-recommendation-policy');
@@ -67,6 +69,28 @@ test('완독 한 번만으로 강한 취향 근거를 만들지 않는다', () =
   assert.equal(hasStrongPersonalEvidence(['친구·우정 테마 완독 1회']), false);
   assert.equal(hasStrongPersonalEvidence(['친구·우정 테마 완독 2회']), true);
   assert.equal(hasStrongPersonalEvidence(['친구·우정 테마 집중 1회']), true);
+});
+
+test('독서 근거는 문장 대신 자연스러운 표현용 신호로 전달한다', () => {
+  assert.deepEqual(
+    buildReadingSignal([
+      '유머·말놀이 테마 완독 3회',
+      '유머·말놀이 테마 집중 4회',
+      '유머·말놀이 테마 질문 많음 1회'
+    ], '유머·말놀이'),
+    {
+      theme: '유머·말놀이',
+      repeated: true,
+      focused: true,
+      askedQuestions: true,
+      explicitInterest: false
+    }
+  );
+});
+
+test('완독·집중 기록을 보고하는 추천 문장을 차단한다', () => {
+  assert.equal(hasRecommendationAuditLanguage('최근 유머 책을 여러 번 완독한 기록이 있어 잘 맞습니다.'), true);
+  assert.equal(hasRecommendationAuditLanguage('말놀이 리듬을 즐겨 온 흐름과 자연스럽게 이어져요.'), false);
 });
 
 test('아이보다 권장 시작 연령이 크게 높은 책은 제외한다', () => {

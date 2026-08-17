@@ -4,8 +4,10 @@
 const { createClient } = require('@supabase/supabase-js');
 const { normalizeThemes, inferThemes } = require('../lib/theme-taxonomy');
 const {
+  buildReadingSignal,
   cleanOwnedFallbackDescription,
   hasStrongPersonalEvidence,
+  hasRecommendationAuditLanguage,
   isAgeEligible,
   parseAgeRange,
   parseThemes,
@@ -14,8 +16,7 @@ const {
 const {
   buildFallbackRecommendationReason,
   cleanGeneratedRecommendationReason,
-  cleanText,
-  formatRecommendationEvidence
+  cleanText
 } = require('../lib/recommendation-reason');
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 const DEBUG_RECO = process.env.DEBUG_RECO === '1';
@@ -740,15 +741,14 @@ ${description || '(소개 없음)'}
 async function generateRecommendationReasonsBatch(items, childProfile, explicitInterests) {
   const entries = items.map((item, index) => {
     const themes = item._themes || resolveBookThemes(item.book, 3);
-    const ruleReasons = buildRuleReasons(item.book, item, childProfile, explicitInterests, item._recType);
     const strongEvidence = hasStrongPersonalEvidence(item.evidence);
     const fallbackText = buildFallbackRecommendationReason({
       title: item.book.fields['제목'],
       description: cleanOwnedFallbackDescription(item.book.fields['설명']),
-      ruleReasons,
+      ruleReasons: [],
       themes,
       recType: item._recType,
-      hasPersonalEvidence: strongEvidence
+      hasPersonalEvidence: false
     });
     return {
       key: String(index),
@@ -758,8 +758,7 @@ async function generateRecommendationReasonsBatch(items, childProfile, explicitI
       primaryTheme: themes[0] || null,
       secondaryThemes: themes.slice(1),
       recommendationType: item._recType === 'explore' ? '탐색' : '익숙한 취향',
-      recommendationEvidence: (item.evidence || []).map(formatRecommendationEvidence),
-      evidenceStrength: strongEvidence ? 'strong' : (item.evidence?.length ? 'weak' : 'none'),
+      readingSignal: strongEvidence ? buildReadingSignal(item.evidence, themes[0]) : null,
       fallbackText
     };
   });
@@ -800,17 +799,18 @@ async function generateRecommendationReasonsBatch(items, childProfile, explicitI
   const developerPrompt = `너는 3~5세 아이의 독서 기록을 바탕으로 부모에게 보유 도서 추천 이유를 설명한다.
 각 책마다 따뜻하고 구체적인 한국어 두 문장, 100~180자로 작성하라.
 
-근거 규칙:
-- 개인화 연결에는 primaryTheme와 recommendationEvidence만 사용하라. secondaryThemes는 책 내용 설명에만 쓸 수 있다.
-- evidenceStrength가 weak이면 한 번의 경험을 사실로만 언급하고, 선호·성향·취향으로 단정하지 마라.
-- evidenceStrength가 none이면 개인화한 척하지 말고 책 자체의 구체적인 매력을 설명하라.
-- 완독 기록만으로 만들기·운동 같은 활동을 좋아한다고 추측하지 마라.
+문체와 근거 규칙:
+- 첫 문장부터 이 책만의 인물·사건·그림·말맛을 구체적으로 설명하라.
+- readingSignal은 추천을 고른 내부 근거일 뿐이다. 완독, 집중도, 횟수, 기록 같은 데이터 용어를 화면 문장에 쓰지 마라.
+- readingSignal이 있으면 책의 구체적인 매력과 한 문장 안에서 은근히 연결하라. 근거만 설명하는 별도 문장을 만들지 마라.
+- readingSignal이 없으면 개인화한 척하지 말고 책 자체의 매력만 설명하라.
+- 반복 독서만으로 만들기·운동 같은 활동을 좋아한다고 추측하지 마라.
 - 아이가 학교·유치원·여행 등 책 속 사건을 실제로 겪었다고 만들지 마라. 책 속 사건은 반드시 주인공이나 '책 속'을 주어로 써라.
 - 추천 유형이 탐색이면 낯선 주제라는 점을 부담 없이 표현하고, 익숙한 취향이면 확인된 근거만 연결하라.
 - 나이는 표현과 난이도 판단에만 참고하고 '우리 3세 아이'처럼 문장에 끼워 넣지 마라.
 - 책 소개의 판매량·수상·출판 홍보 문구는 사용하지 마라.
 - 금지: 좋아하네요, 좋아할 것 같아요, 성향, 딱 맞아요, 교육적, 발달에 좋은, 배울 수 있어요, 상상력을 키워요, 호기심을 자극해요.
-- recommendationEvidence는 사실 메모다. 그대로 복사하지 말고 자연스러운 문장으로 바꿔라.
+- 금지 문장 예: "최근 완독 기록이 있어 잘 맞습니다", "집중도가 높았던 점과 연결됩니다".
 - 입력된 모든 key를 그대로 한 번씩 출력하라.`;
   let lastDiagnostics = null;
 
@@ -869,7 +869,9 @@ async function generateRecommendationReasonsBatch(items, childProfile, explicitI
       const results = new Map();
       for (const entry of entries) {
         const text = cleanGeneratedRecommendationReason(generated.get(entry.key), entry.key);
-        const invalid = text.length < 60 || banned.some(phrase => text.includes(phrase));
+        const invalid = text.length < 60
+          || banned.some(phrase => text.includes(phrase))
+          || hasRecommendationAuditLanguage(text);
         results.set(entry.key, invalid
           ? { text: entry.fallbackText, source: 'rule_batch_guard_enriched' }
           : { text, source: 'ai_batch' });
