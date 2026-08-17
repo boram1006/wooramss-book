@@ -1180,51 +1180,6 @@
                 };
             };
 
-            // 📚 챕터북 전환 감지
-            const detectChapterBookReadiness = (booksData, logsData) => {
-                if (logsData.length < 10) return null; // 최소 10권 필요
-                
-                // 최근 10권 분석
-                const recentBooks = logsData
-                    .slice(-10)
-                    .map(log => booksData.find(b => b.id === log.fields['책']?.[0]))
-                    .filter(Boolean);
-                
-                // 조건 1: 긴 이야기 선호 (글밥이 많은 책)
-                const longStoryBooks = recentBooks.filter(b => {
-                    const themes = (b.fields['테마'] || '').toLowerCase();
-                    return themes.includes('이야기') || themes.includes('상상');
-                }).length;
-                
-                // 조건 2: 5-7세 연령대
-                const ageAppropriate = recentBooks.filter(b => {
-                    const age = b.fields['연령'] || '';
-                    return age.match(/[5-7]/);
-                }).length;
-                
-                // 조건 3: 😍 반응이 많음 (독서 즐거움)
-                const lovedCount = logsData
-                    .slice(-10)
-                    .filter(log => log.fields['아이반응'] === '😍').length;
-                
-                const signals = {
-                    longStory: longStoryBooks >= 5,
-                    ageReady: ageAppropriate >= 7,
-                    enjoysReading: lovedCount >= 4
-                };
-                
-                const readyCount = Object.values(signals).filter(Boolean).length;
-                
-                if (readyCount >= 2) {
-                    return {
-                        level: readyCount === 3 ? 'STRONG' : 'MEDIUM',
-                        signals
-                    };
-                }
-                
-                return null;
-            };
-
             // 🎯 오늘의 추천 (API로 가져오기)
             const [recommendations, setRecommendations] = useState([]);
             const [recommendationsLoading, setRecommendationsLoading] = useState(false);
@@ -1330,16 +1285,6 @@
                     setRecommendationsLoading(false);
                 }
             }
-
-            // 📚 챕터북 전환 감지
-            const [chapterBookReadiness, setChapterBookReadiness] = useState(null);
-            
-            useEffect(() => {
-                if (books.length > 0 && readingLogs.length > 0) {
-                    const readiness = detectChapterBookReadiness(books, readingLogs);
-                    setChapterBookReadiness(readiness);
-                }
-            }, [books, readingLogs]);
 
             // 📖 읽고 있는 책 (제거 - 의도된 기능이 아님)
             // const currentlyReading = readingLogs
@@ -1961,47 +1906,6 @@
                                                 </div>
                                             </div>
                                         ))}
-                                    </div>
-                                </div>
-                            )}
-
-                            {/* 📖 챕터북 전환 안내 */}
-                            {chapterBookReadiness && (
-                                <div style={{
-                                    background: 'linear-gradient(135deg, #E6F3FF 0%, #F0E6FF 100%)',
-                                    borderRadius: '20px',
-                                    padding: '2rem',
-                                    marginBottom: '2rem',
-                                    border: '2px solid #B8E6FF'
-                                }}>
-                                    <h3 style={{
-                                        fontSize: '1.5rem',
-                                        color: '#4A90E2',
-                                        marginBottom: '1rem',
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        gap: '0.5rem'
-                                    }}>
-                                        🌟 우람이의 다음 단계
-                                    </h3>
-                                    <p style={{
-                                        fontSize: '1rem',
-                                        color: '#555',
-                                        lineHeight: '1.6',
-                                        marginBottom: '1rem'
-                                    }}>
-                                        {chapterBookReadiness.level === 'STRONG' 
-                                            ? '지금 우람이는 그림책보다 이야기 중심 책을 더 재미있어할 준비가 된 것 같아요. 짧은 챕터로 나뉜 책도 부담 없이 시작해볼 수 있는 시기예요.'
-                                            : '요즘처럼 긴 이야기를 잘 듣는다면, 글밥이 조금 더 많은 책도 충분히 즐길 수 있어요.'}
-                                    </p>
-                                    <div style={{
-                                        fontSize: '0.85rem',
-                                        color: '#666',
-                                        background: 'rgba(255,255,255,0.7)',
-                                        padding: '0.75rem',
-                                        borderRadius: '10px'
-                                    }}>
-                                        💡 이야기책으로 자연스럽게 넘어가면 독서 자신감이 더 커질 수 있어요
                                     </div>
                                 </div>
                             )}
