@@ -1,5 +1,8 @@
 // 기존 책의 가이드 업데이트
-const { generateBookGuide } = require('../lib/book-guide');
+const { generateBookGuide, generateBookGuides } = require('../lib/book-guide');
+
+// 2,048권 기존 데이터 재생성 후 제거할 일회성 유지보수 키.
+const BULK_REFRESH_TOKEN = 'guide-refresh-2f4a91c8-20260817';
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
@@ -38,13 +41,59 @@ function debugLog(...args) {
   }
 
   try {
-    const { bookId, title, author, childAgeMonths } = req.body;
+    const { bookId, title, author, childAgeMonths, bookIds, maintenanceToken } = req.body;
+    const supabase = getSupabaseClient();
+
+    if (Array.isArray(bookIds)) {
+      if (maintenanceToken !== BULK_REFRESH_TOKEN) {
+        return res.status(403).json({ error: 'Forbidden' });
+      }
+
+      const uniqueBookIds = Array.from(new Set(bookIds.map(String).filter(Boolean))).slice(0, 12);
+      if (!uniqueBookIds.length) {
+        return res.status(400).json({ error: 'bookIds required' });
+      }
+
+      const { data: storedBooks, error: booksError } = await supabase
+        .from('books')
+        .select('id,title,author,publisher,description,isbn')
+        .in('id', uniqueBookIds);
+      if (booksError) throw new Error(`Supabase books lookup error: ${booksError.message}`);
+      if ((storedBooks || []).length !== uniqueBookIds.length) {
+        throw new Error('일부 책을 찾지 못했습니다');
+      }
+
+      const guides = await generateBookGuides(storedBooks.map(book => ({
+        key: String(book.id),
+        title: book.title,
+        author: book.author || '',
+        publisher: book.publisher || '',
+        description: book.description || ''
+      })), { apiKey: OPENAI_API_KEY, childAgeMonths });
+      const guideById = new Map(guides.map(guide => [guide.key, guide]));
+
+      const updatedIds = await Promise.all(storedBooks.map(async book => {
+        const guide = guideById.get(String(book.id));
+        if (!guide?.parentGuide || !guide?.activities) {
+          throw new Error(`AI 가이드 생성 결과가 완전하지 않습니다: ${book.id}`);
+        }
+        const { error } = await supabase.from('books').update({
+          themes: guide.themes.join(','),
+          age_range: guide.ageRange,
+          parent_guide: guide.parentGuide,
+          activities: guide.activities
+        }).eq('id', book.id);
+        if (error) throw new Error(`Supabase update error (${book.id}): ${error.message}`);
+        return book.id;
+      }));
+
+      return res.status(200).json({ success: true, updatedIds });
+    }
 
     if (!bookId || !title) {
       return res.status(400).json({ error: 'bookId and title required' });
     }
 
-    const supabase = getSupabaseClient();
     const { data: storedBook, error: bookError } = await supabase
       .from('books')
       .select('id,title,author,publisher,description,isbn')
