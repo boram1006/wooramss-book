@@ -110,3 +110,25 @@ test('품질 검사는 형식과 공통 반응 문구를 구분한다', () => {
   assert.deepEqual(assessGuideQuality(valid), []);
   assert.deepEqual(assessGuideQuality({ ...valid, parentGuide: valid.parentGuide.replace(/아이의 예상.+$/, '잠깐 기다린 뒤 아이 말을 한두 단어 확장해 되돌려 주세요.') }), ['generic_response']);
 });
+
+test('한 질문 안의 선택지와 복수 질문을 저장 전에 차단한다', () => {
+  const base = {
+    ageRange: '3-5세',
+    interactionStrategy: '소리와 말놀이',
+    parentGuide: '함께 볼 점: 반복되는 소리를 들어보세요. 질문: ① 어떤 소리가 들려? ② 소리를 크게 혹은 작게 내볼래? 반응: 반복구를 손뼉으로 받아 같은 박자를 이어 가세요.',
+    activities: '준비물: 종이, 크레용. 방법: ① 소리를 그려요. ② 박자를 만들어요.'
+  };
+  assert.deepEqual(assessGuideQuality(base), ['question_contains_choices']);
+  assert.deepEqual(assessGuideQuality({ ...base, parentGuide: base.parentGuide.replace('어떤 소리가 들려?', '어떤 소리가 들려? 어디서 들려?').replace('크게 혹은 작게 내볼래?', '소리를 바꾸면 어떻게 들릴까?') }), ['multiple_questions_in_one']);
+});
+
+test('책과 무관한 공통 반응 도입과 지나치게 긴 가이드를 차단한다', () => {
+  const commonOpening = {
+    ageRange: '3-5세',
+    interactionStrategy: '그림 단서 찾기',
+    parentGuide: '함께 볼 점: 표지의 우산을 살펴보세요. 질문: ① 어떤 색이 보여? ② 다음에는 무엇이 나올까? 반응: 아이의 답을 듣고 우산의 위치와 색을 함께 찾아보세요.',
+    activities: '준비물: 종이, 크레용. 방법: ① 우산을 그려요. ② 색을 골라요.'
+  };
+  assert.deepEqual(assessGuideQuality(commonOpening), ['generic_response_opening']);
+  assert.deepEqual(assessGuideQuality({ ...commonOpening, parentGuide: `${commonOpening.parentGuide}${' 긴 문장'.repeat(40)}` }), ['generic_response_opening', 'parent_guide_too_long']);
+});
