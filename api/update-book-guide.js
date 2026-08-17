@@ -1,5 +1,18 @@
 // 기존 책의 가이드 업데이트
-const { generateBookGuide } = require('../lib/book-guide');
+const { assessGuideQuality, generateBookGuide, generateBookGuides } = require('../lib/book-guide');
+
+const PILOT_BOOK_IDS = [
+  '955099ce-3b1b-494e-9188-c306d413499a',
+  '30e74b6c-989b-4f1f-9425-67eecefd1c1d',
+  '69f85b68-0be8-4a4c-bd40-732eccac1dd7',
+  '310aaa13-8fe3-460d-9b5a-fc70899c01fb',
+  'a93d2067-7d61-43ae-97f6-60411ebed4b0',
+  '99a37753-bf14-4883-a8bd-1bd409def866',
+  '7f2ef1d8-507f-4d1b-996e-f301b7d7b33d',
+  'f778f323-675f-437c-8ea2-32ecefe6bdbc',
+  '0ca90d28-108f-446c-846a-81099dbac119',
+  'a9ca4000-3164-443b-aaf1-de9b02dd1421'
+];
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
@@ -40,6 +53,32 @@ function debugLog(...args) {
   try {
     const { bookId, title, author, childAgeMonths } = req.body;
     const supabase = getSupabaseClient();
+
+    // 임시 프리뷰 배포에서만 사용하는 비저장 품질 평가 경로다.
+    if (req.body?.pilot === true && req.headers['x-guide-pilot'] === 'strategy-eval-v2') {
+      const { data: books, error: pilotBooksError } = await supabase
+        .from('books')
+        .select('id,title,author,publisher,description,isbn')
+        .in('id', PILOT_BOOK_IDS);
+      if (pilotBooksError) throw new Error(`Supabase pilot lookup error: ${pilotBooksError.message}`);
+      const byId = new Map((books || []).map(book => [book.id, book]));
+      const orderedBooks = PILOT_BOOK_IDS.map(id => byId.get(id)).filter(Boolean);
+      const guides = await generateBookGuides(orderedBooks.map(book => ({
+        key: book.id,
+        title: book.title,
+        author: book.author,
+        publisher: book.publisher,
+        description: book.description
+      })), { apiKey: OPENAI_API_KEY, childAgeMonths: 39 });
+      const guideById = new Map(guides.map(guide => [guide.key, guide]));
+      return res.status(200).json({
+        saved: false,
+        samples: orderedBooks.map(book => {
+          const guide = guideById.get(book.id);
+          return { title: book.title, description: book.description, guide, issues: assessGuideQuality(guide) };
+        })
+      });
+    }
 
     if (!bookId || !title) {
       return res.status(400).json({ error: 'bookId and title required' });
