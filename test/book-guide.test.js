@@ -131,7 +131,7 @@ test('한 질문 안의 선택지와 복수 질문을 저장 전에 차단한다
     parentGuide: '함께 볼 점: 반복되는 소리를 들어보세요. 질문: ① 어떤 소리가 들려? ② 소리를 크게 혹은 작게 내볼래? 반응: 반복구를 손뼉으로 받아 같은 박자를 이어 가세요.',
     activities: '준비물: 종이, 크레용. 방법: ① 소리를 그려요. ② 박자를 만들어요.'
   };
-  assert.deepEqual(assessGuideQuality(base), ['question_contains_choices']);
+  assert.deepEqual(assessGuideQuality(base), ['question_contains_choices', 'question_not_open']);
   assert.deepEqual(assessGuideQuality({ ...base, parentGuide: base.parentGuide.replace('어떤 소리가 들려?', '어떤 소리가 들려? 어디서 들려?').replace('크게 혹은 작게 내볼래?', '소리를 바꾸면 어떻게 들릴까?') }), ['multiple_questions_in_one']);
 });
 
