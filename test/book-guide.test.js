@@ -220,4 +220,5 @@ test('고유어 받침 조사와 메타·지시형 반응을 차단한다', () =
   };
   assert.deepEqual(assessGuideQuality(base), ['wrong_book_anchor_particle', 'meta_response_wording']);
   assert.deepEqual(assessGuideQuality({ ...base, parentGuide: base.parentGuide.replace('『달』가 나온 다음 장면에서 예상과 실제를 비교한다고 말해', '『달』이 나온 장면을 예측하게 하고 다음 장면과 비교해') }), ['directive_response']);
+  assert.deepEqual(assessGuideQuality({ ...base, parentGuide: base.parentGuide.replace('『달』가 나온 다음 장면에서 예상과 실제를 비교한다고 말해', '『달』의 모양을 몸짓으로 보여 달라 해') }), ['directive_response']);
 });
