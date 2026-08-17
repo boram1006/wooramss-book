@@ -95,6 +95,32 @@ test('명확한 책 단서로 상호작용 전략을 먼저 결정한다', () =>
   assert.equal(selectInteractionStrategy({ title: '손 손 손', description: '손이 어떻게 생기고 움직이고 기능하는지 놀이처럼 보여 준다.' }), '낱말과 개념 익히기');
   assert.equal(selectInteractionStrategy({ title: '그림책 만들기', description: '책 한 권을 완성하도록 시작부터 마무리까지 전 과정을 알려 준다.' }), '순서 다시 말하기');
   assert.equal(selectInteractionStrategy({ title: '사뿐사뿐 따삐르', description: '의성어와 의태어가 풍부한 정글 그림책이다.' }), '소리와 말놀이');
+  assert.equal(selectInteractionStrategy({ title: '생쥐 모이의 도전', description: '가족과 살던 모이가 바깥세상으로 떠나 새로운 곳에 도전한다.' }), '순서 다시 말하기');
+});
+
+test('품질 탈락 책만 사유를 붙여 자동 재작성한다', async () => {
+  let calls = 0;
+  let retryInput = '';
+  const guide = await generateBookGuide({ isbn: 'retry-1', title: '소리 책', description: '의성어와 말놀이가 반복되는 책이다.' }, {
+    apiKey: 'test-key',
+    fetchImpl: async (url, options) => {
+      calls += 1;
+      const body = JSON.parse(options.body);
+      if (calls === 1) {
+        return jsonResponse({ output_text: JSON.stringify({ guides: [generatedGuide('retry-1', {
+          question2: '소리를 크게 또는 작게 해볼래?'
+        })] }) });
+      }
+      retryInput = body.input[1].content;
+      return jsonResponse({ output_text: JSON.stringify({ guides: [generatedGuide('retry-1', {
+        question2: '어떤 새 소리를 만들고 싶어?'
+      })] }) });
+    }
+  });
+
+  assert.equal(calls, 2);
+  assert.match(retryInput, /재작성 필수 조건:/);
+  assert.match(guide.parentGuide, /어떤 새 소리/);
 });
 
 test('공통 기다리기·말 확장 반응은 저장 가능한 결과로 인정하지 않는다', async () => {

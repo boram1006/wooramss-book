@@ -69,7 +69,7 @@ function debugLog(...args) {
         author: book.author,
         publisher: book.publisher,
         description: book.description
-      })), { apiKey: OPENAI_API_KEY, childAgeMonths: 39, includeDiagnostics: true });
+      })), { apiKey: OPENAI_API_KEY, childAgeMonths: 39, includeDiagnostics: true, maxValidationRetries: 2 });
       const guideById = new Map(guides.map(guide => [guide.key, guide]));
       return res.status(200).json({
         saved: false,
