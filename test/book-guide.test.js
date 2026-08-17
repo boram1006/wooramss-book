@@ -1,6 +1,27 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { generateBookGuide, generateBookGuides, sanitizeGuide, SYSTEM_PROMPT } = require('../lib/book-guide');
+const {
+  INTERACTION_STRATEGIES,
+  assessGuideQuality,
+  generateBookGuide,
+  generateBookGuides,
+  sanitizeGuide,
+  SYSTEM_PROMPT
+} = require('../lib/book-guide');
+
+function generatedGuide(key, overrides = {}) {
+  return {
+    key,
+    ageRange: '3-5세',
+    interactionStrategy: '그림 단서 찾기',
+    focus: '구름의 모양과 페이지마다 달라지는 위치를 함께 살펴보세요.',
+    question1: '구름에서 어떤 모양이 보여?',
+    question2: '다음 장에서는 구름이 어디로 갈까?',
+    response: '아이가 짚은 구름의 모양을 함께 따라 그린 뒤 다음 장의 구름과 달라진 점을 비교해 보세요.',
+    activities: '준비물: 종이, 크레용. 방법: ① 구름 모양을 골라요. ② 몸으로 움직여요. ③ 이야기를 들려줘요.',
+    ...overrides
+  };
+}
 
 function jsonResponse(body, status = 200) {
   return { ok: status >= 200 && status < 300, status, json: async () => body, text: async () => JSON.stringify(body) };
@@ -13,15 +34,16 @@ test('가이드 생성 스키마에는 추천용 테마가 들어가지 않는�
     childAgeMonths: 39,
     fetchImpl: async (url, options) => {
       requestBody = JSON.parse(options.body);
-      return jsonResponse({ output_text: JSON.stringify({ guides: [{
-        key: '9781', ageRange: '3-5세', parentGuide: '함께 볼 점: 구름을 살펴보세요. 질문: ① 어떤 모양이 보여? ② 네가 구름이라면 어디로 가고 싶어? 반응: 기다린 뒤 아이 말을 되돌려주세요.', activities: '준비물: 종이, 크레용. 방법: ① 구름 모양을 골라요. ② 몸으로 움직여요. ③ 이야기를 들려줘요.'
-      }] }) });
+      return jsonResponse({ output_text: JSON.stringify({ guides: [generatedGuide('9781')] }) });
     }
   });
 
   assert.equal(guide.ageRange, '3-5세');
+  assert.equal(guide.interactionStrategy, '그림 단서 찾기');
+  assert.match(guide.parentGuide, /구름의 모양/);
   assert.equal('themes' in guide, false);
   assert.equal('themes' in requestBody.text.format.schema.properties.guides.items.properties, false);
+  assert.deepEqual(requestBody.text.format.schema.properties.guides.items.properties.interactionStrategy.enum, INTERACTION_STRATEGIES);
   assert.match(requestBody.input[1].content, /39개월/);
   assert.match(SYSTEM_PROMPT, /테마·관심사·추천 분류는 생성하거나 참고하지 않습니다/);
 });
@@ -33,14 +55,14 @@ test('여러 책을 한 번 호출하고 입력 순서로 되돌린다', async (
     fetchImpl: async () => {
       calls += 1;
       return jsonResponse({ output_text: JSON.stringify({ guides: [
-        { key: '222', ageRange: '3-5세', parentGuide: '둘째 부모 가이드', activities: '둘째 연계 놀이' },
-        { key: '111', ageRange: '3-5세', parentGuide: '첫째 부모 가이드', activities: '첫째 연계 놀이' }
+        generatedGuide('222', { focus: '둘째 책의 표지와 실제로 보이는 그림 요소를 차례로 살펴보세요.' }),
+        generatedGuide('111', { focus: '첫째 책의 표지와 실제로 보이는 그림 요소를 차례로 살펴보세요.' })
       ] }) });
     }
   });
   assert.equal(calls, 1);
   assert.deepEqual(guides.map(guide => guide.key), ['111', '222']);
-  assert.equal(guides[0].parentGuide, '첫째 부모 가이드');
+  assert.match(guides[0].parentGuide, /첫째 책/);
 });
 
 test('API 키가 없으면 비어 있는 가이드를 반환한다', async () => {
@@ -54,8 +76,37 @@ test('가이드 출력 공백을 정리한다', () => {
 });
 
 test('프롬프트는 열린 질문과 안전한 놀이 형식을 강제한다', () => {
-  assert.match(SYSTEM_PROMPT, /질문은 정확히 2개/);
+  assert.match(SYSTEM_PROMPT, /question1, question2/);
   assert.match(SYSTEM_PROMPT, /두 가지 선택지를 제시하지 않습니다/);
   assert.match(SYSTEM_PROMPT, /준비물: A, B\. 방법:/);
   assert.match(SYSTEM_PROMPT, /48개월 미만/);
+});
+
+test('프롬프트는 책에 맞는 전략을 고르고 공통 반응 문구를 금지한다', () => {
+  assert.equal(INTERACTION_STRATEGIES.length, 8);
+  assert.match(SYSTEM_PROMPT, /같은 전략을 세 권 연속 쓰지 않습니다/);
+  assert.match(SYSTEM_PROMPT, /모든 책에 통용되는 '잠깐 기다리기'/);
+  assert.match(SYSTEM_PROMPT, /선택한 전략을 실제로 실행/);
+});
+
+test('공통 기다리기·말 확장 반응은 저장 가능한 결과로 인정하지 않는다', async () => {
+  const guide = await generateBookGuide({ isbn: '9782', title: '반복 책' }, {
+    apiKey: 'test-key',
+    fetchImpl: async () => jsonResponse({ output_text: JSON.stringify({ guides: [generatedGuide('9782', {
+      response: '아이가 말하면 잠깐 기다렸다가 한두 단어를 덧붙여 되돌려 주세요.'
+    })] }) })
+  });
+
+  assert.deepEqual(guide, { ageRange: '', parentGuide: '', activities: '' });
+});
+
+test('품질 검사는 형식과 공통 반응 문구를 구분한다', () => {
+  const valid = {
+    ageRange: '3-5세',
+    interactionStrategy: '예측하고 확인하기',
+    parentGuide: '함께 볼 점: 문 앞에 놓인 발자국을 살펴보세요. 질문: ① 발자국은 어디로 이어져? ② 다음에는 누가 나타날까? 반응: 아이의 예상을 기억해 두었다가 다음 장에서 실제 단서와 같은 점과 다른 점을 함께 찾아보세요.',
+    activities: '준비물: 종이, 크레용. 방법: ① 발자국을 그려요. ② 길을 이어요.'
+  };
+  assert.deepEqual(assessGuideQuality(valid), []);
+  assert.deepEqual(assessGuideQuality({ ...valid, parentGuide: valid.parentGuide.replace(/아이의 예상.+$/, '잠깐 기다린 뒤 아이 말을 한두 단어 확장해 되돌려 주세요.') }), ['generic_response']);
 });
