@@ -1,5 +1,6 @@
 // Supabase 데이터 가져오기 (Airtable 대체)
 const { createClient } = require('@supabase/supabase-js');
+const { inferThemes } = require('../lib/theme-taxonomy');
 
 // Supabase 클라이언트 초기화
 function getSupabaseClient() {
@@ -32,7 +33,7 @@ function convertAirtableToSupabase(records, tableName) {
         '발행년': record.pub_year,
         '표지이미지': record.cover_image,
         '설명': record.description,
-        '테마': record.themes,
+        '테마': inferThemes(record, 3).join(','),
         '연령': record.age_range,
         '부모_읽기_가이드': record.parent_guide,
         '연계놀이': record.activities,
@@ -70,7 +71,7 @@ function convertSupabaseToAirtable(data, tableName) {
         '발행년': data.pub_year,
         '표지이미지': data.cover_image,
         '설명': data.description,
-        '테마': data.themes,
+        '테마': inferThemes(data, 3).join(','),
         '연령': data.age_range,
         '부모_읽기_가이드': data.parent_guide,
         '연계놀이': data.activities,

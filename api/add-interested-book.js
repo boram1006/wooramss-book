@@ -3,6 +3,7 @@
 
 const { createClient } = require('@supabase/supabase-js');
 const { generateBookGuide } = require('../lib/book-guide');
+const { inferThemes } = require('../lib/theme-taxonomy');
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 const DEBUG_RECO = process.env.DEBUG_RECO === '1';
 
@@ -85,7 +86,7 @@ async function addBookToSupabase(bookInfo, aiGuide) {
     pub_year: bookInfo.pubDate ? parseInt(bookInfo.pubDate.substring(0, 4)) : null,
     cover_image: bookInfo.cover || '',
     description: bookInfo.description || '',
-    themes: Array.isArray(aiGuide.themes) ? aiGuide.themes.join(',') : (aiGuide.themes || ''),
+    themes: inferThemes(bookInfo).join(','),
     age_range: aiGuide.ageRange || '',
     parent_guide: aiGuide.parentGuide || '',
     activities: aiGuide.activities || '',
@@ -176,7 +177,7 @@ module.exports = async (req, res) => {
       const bookInfo = await getBookFromAladin(isbn);
       
       console.log('🤖 AI 가이드 생성 중...');
-      let aiGuide = { themes: [], ageRange: '', parentGuide: '', activities: '' };
+      let aiGuide = { ageRange: '', parentGuide: '', activities: '' };
       try {
         aiGuide = await generateBookGuide(bookInfo, { apiKey: OPENAI_API_KEY, childAgeMonths });
       } catch (error) {

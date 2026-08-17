@@ -4773,18 +4773,32 @@
             const [interestCandidates, setInterestCandidates] = useState([]);
             const [autoTopInterests, setAutoTopInterests] = useState([]);
             const [interestLoading, setInterestLoading] = useState(false);
+            const [interestGroups, setInterestGroups] = useState([]);
+            const [manualInterest, setManualInterest] = useState('');
+            const [interestError, setInterestError] = useState('');
+            const directInterests = selectedInterests.filter(
+                item => !autoTopInterests.some(auto => auto.toLowerCase() === String(item).toLowerCase())
+            );
 
             useEffect(() => {
                 let cancelled = false;
                 const loadCandidates = async () => {
                     setInterestLoading(true);
                     try {
-                        const response = await fetch('/api/interest-candidates', { cache: 'no-store' });
+                        const selectedQuery = encodeURIComponent(selectedInterests.join(','));
+                        const response = await fetch(`/api/interest-candidates?selected=${selectedQuery}`, { cache: 'no-store' });
                         if (!response.ok) throw new Error('관심사 후보 로드 실패');
                         const data = await response.json();
                         if (!cancelled) {
                             setInterestCandidates(data.candidates || []);
                             setAutoTopInterests(data.autoTop || []);
+                            setInterestGroups(data.groups || []);
+                            const normalizedSelected = (data.normalizedSelected || []).filter(
+                                item => !(data.autoTop || []).includes(item)
+                            );
+                            if (JSON.stringify(normalizedSelected) !== JSON.stringify(selectedInterests)) {
+                                onChangeInterests(normalizedSelected);
+                            }
                         }
                     } catch (e) {
                         if (!cancelled) {
@@ -4815,6 +4829,33 @@
                     next = [...selectedInterests, normalized];
                 }
                 onChangeInterests(next);
+            };
+
+            const addManualInterest = async () => {
+                const input = manualInterest.trim();
+                if (!input || selectedInterests.length >= 8) return;
+                setInterestError('');
+                try {
+                    const response = await fetch(`/api/interest-candidates?q=${encodeURIComponent(input)}`, { cache: 'no-store' });
+                    if (!response.ok) throw new Error('테마 확인 실패');
+                    const data = await response.json();
+                    const canonical = data.normalizedInput;
+                    if (!canonical) {
+                        setInterestError('추천에 쓸 수 있는 테마로 찾지 못했어요. 아래 목록에서 가장 가까운 항목을 골라주세요.');
+                        return;
+                    }
+                    if (autoTopInterests.some(item => item === canonical)) {
+                        setInterestError(`‘${canonical}’은 이미 자동 관심사에 반영되어 있어요.`);
+                        setManualInterest('');
+                        return;
+                    }
+                    if (!selectedInterests.some(item => item === canonical)) {
+                        onChangeInterests([...selectedInterests, canonical]);
+                    }
+                    setManualInterest('');
+                } catch (error) {
+                    setInterestError('테마를 확인하지 못했어요. 잠시 후 다시 시도해주세요.');
+                }
             };
 
             const handleSave = () => {
@@ -4895,37 +4936,82 @@
                             <div style={{ fontSize: '0.85rem', color: '#777', marginBottom: '0.5rem' }}>
                                 직접 선택
                             </div>
-                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
+                            <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.75rem' }}>
+                                <input
+                                    type="text"
+                                    value={manualInterest}
+                                    onChange={(e) => setManualInterest(e.target.value)}
+                                    onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addManualInterest(); } }}
+                                    placeholder="예: 고양이, 용기, 계절"
+                                    style={{
+                                        flex: 1,
+                                        minWidth: 0,
+                                        padding: '0.65rem 0.75rem',
+                                        border: '1px solid #ddd',
+                                        borderRadius: '10px',
+                                        fontSize: '0.9rem'
+                                    }}
+                                />
+                                <button
+                                    type="button"
+                                    onClick={addManualInterest}
+                                    disabled={!manualInterest.trim() || directInterests.length >= 8}
+                                    style={{
+                                        border: 'none',
+                                        background: '#8B7EC8',
+                                        color: 'white',
+                                        borderRadius: '10px',
+                                        padding: '0 1rem',
+                                        cursor: 'pointer'
+                                    }}
+                                >
+                                    추가
+                                </button>
+                            </div>
+                            {interestError && (
+                                <div style={{ color: '#C45C5C', fontSize: '0.8rem', marginBottom: '0.75rem' }}>
+                                    {interestError}
+                                </div>
+                            )}
+                            <div style={{ fontSize: '0.78rem', color: '#888', marginBottom: '0.75rem' }}>
+                                책의 형식이나 등장인물이 아니라, 아이가 반복해서 찾는 관심과 이야기 경험을 기준으로 골라요. 자동 관심사와 같은 값은 한 번만 반영됩니다.
+                            </div>
+                            <div>
                                 {!interestLoading && interestCandidates.length === 0 && (
                                     <span style={{ fontSize: '0.85rem', color: '#999' }}>후보가 없습니다</span>
                                 )}
-                                {interestCandidates.map((c, idx) => {
-                                    const isSelected = selectedInterests.some(
-                                        (item) => item.toLowerCase() === c.label.toLowerCase()
-                                    );
-                                    return (
-                                        <button
-                                            key={`${c.label}-${idx}`}
-                                            type="button"
-                                            onClick={() => toggleInterest(c.label)}
-                                            style={{
-                                                border: isSelected ? '2px solid #8B7EC8' : '1px solid #ddd',
-                                                background: isSelected ? '#F0EDFF' : 'white',
-                                                color: '#333',
-                                                padding: '0.35rem 0.75rem',
-                                                borderRadius: '20px',
-                                                fontSize: '0.85rem',
-                                                cursor: 'pointer'
-                                            }}
-                                        >
-                                            {c.label}
-                                        </button>
-                                    );
-                                })}
+                                {interestGroups.map(group => (
+                                    <div key={group.id} style={{ marginBottom: '0.8rem' }}>
+                                        <div style={{ color: '#777', fontSize: '0.78rem', marginBottom: '0.35rem' }}>{group.label}</div>
+                                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
+                                            {group.themes.filter(label => !autoTopInterests.includes(label)).map(label => {
+                                                const isSelected = directInterests.includes(label);
+                                                return (
+                                                    <button
+                                                        key={label}
+                                                        type="button"
+                                                        onClick={() => toggleInterest(label)}
+                                                        style={{
+                                                            border: isSelected ? '2px solid #8B7EC8' : '1px solid #ddd',
+                                                            background: isSelected ? '#F0EDFF' : 'white',
+                                                            color: '#333',
+                                                            padding: '0.35rem 0.75rem',
+                                                            borderRadius: '20px',
+                                                            fontSize: '0.85rem',
+                                                            cursor: 'pointer'
+                                                        }}
+                                                    >
+                                                        {label}
+                                                    </button>
+                                                );
+                                            })}
+                                        </div>
+                                    </div>
+                                ))}
                             </div>
-                            {selectedInterests.length > 0 && (
+                            {directInterests.length > 0 && (
                                 <div style={{ marginTop: '0.5rem', fontSize: '0.85rem', color: '#666' }}>
-                                    선택됨: {selectedInterests.join(', ')}
+                                    직접 반영: {directInterests.join(', ')}
                                 </div>
                             )}
                         </div>

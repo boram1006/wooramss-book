@@ -2,6 +2,7 @@
 // 우람이를 위한 추천 (Rule 기반 점수 시스템)
 
 const { createClient } = require('@supabase/supabase-js');
+const { normalizeThemes, inferThemes } = require('../lib/theme-taxonomy');
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 const DEBUG_RECO = process.env.DEBUG_RECO === '1';
 
@@ -24,11 +25,7 @@ function getSupabaseClient() {
 function parseExplicitInterests(raw) {
   if (!raw) return [];
   if (Array.isArray(raw)) raw = raw.join(',');
-  return String(raw)
-    .split(',')
-    .map(s => s.trim().toLowerCase())
-    .filter(Boolean)
-    .slice(0, 8);
+  return normalizeThemes(raw, 8).map(theme => theme.toLowerCase());
 }
 
 function clamp(n, min, max) {
@@ -852,7 +849,7 @@ module.exports = async (req, res) => {
         '발행년': book.pub_year,
         '표지이미지': book.cover_image,
         '설명': book.description,
-        '테마': book.themes,
+        '테마': inferThemes(book, 3).join(','),
         '연령': book.age_range,
         '부모_읽기_가이드': book.parent_guide,
         '연계놀이': book.activities,

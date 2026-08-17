@@ -1,5 +1,6 @@
 // AI로 책 정보 생성
 const { generateBookGuide } = require('../lib/book-guide');
+const { inferThemes } = require('../lib/theme-taxonomy');
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
@@ -92,8 +93,9 @@ function debugLog(...args) {
       description: aladinData.설명 || ''  // 알라딘에서 가져온 책 설명
     };
 
+    bookData.themes = inferThemes(bookData).join(',');
+
     if (aiContent) {
-      if (aiContent.themes?.length) bookData.themes = aiContent.themes.join(',');
       if (aiContent.ageRange) bookData.age_range = aiContent.ageRange;
       if (aiContent.parentGuide) bookData.parent_guide = aiContent.parentGuide;
       if (aiContent.activities) bookData.activities = aiContent.activities;

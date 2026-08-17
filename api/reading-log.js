@@ -1,5 +1,6 @@
 // 메모 요약 생성 함수 (내부 함수)
 const { generateBookGuides } = require('../lib/book-guide');
+const { inferThemes } = require('../lib/theme-taxonomy');
 
 async function generateMemoSummary(recordId, memo, supabase, OPENAI_API_KEY) {
   try {
@@ -141,7 +142,7 @@ async function registerReadBooks(req, res, supabase) {
       if (!guide?.parentGuide || !guide?.activities) return book;
       return {
         ...book,
-        themes: guide.themes.join(','),
+        themes: inferThemes(book).join(','),
         age_range: guide.ageRange,
         parent_guide: guide.parentGuide,
         activities: guide.activities
@@ -158,7 +159,6 @@ async function registerReadBooks(req, res, supabase) {
     const guide = guideByIsbn.get(normalizeIsbn(book.isbn));
     if (!guide?.parentGuide || !guide?.activities) return;
     const { error } = await supabase.from('books').update({
-      themes: guide.themes.join(','),
       age_range: guide.ageRange,
       parent_guide: guide.parentGuide,
       activities: guide.activities
