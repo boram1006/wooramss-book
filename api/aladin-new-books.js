@@ -6,7 +6,8 @@ const { normalizeThemes, inferThemes } = require('../lib/theme-taxonomy');
 const { inferAladinThemes } = require('../lib/aladin-book-themes');
 const {
   buildFallbackRecommendationReason,
-  cleanGeneratedRecommendationReason
+  cleanGeneratedRecommendationReason,
+  formatRecommendationEvidence
 } = require('../lib/recommendation-reason');
 const ALADIN_API_KEY = process.env.ALADIN_API_KEY || 'ttbcasey862231001';
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
@@ -443,7 +444,8 @@ function calculateRecommendationScore(book, childProfile, airtableBooks, themeSt
   let themeScore = 0;
   let matchedThemes = [];
   
-  bookThemes.forEach(theme => {
+  // 선호도 점수는 책의 최우선 핵심 테마를 기준으로 계산한다.
+  bookThemes.slice(0, 1).forEach(theme => {
     const preference = childProfile.themePreferences[theme] || 0;
     if (preference > 0) {
       const w = themeWeight(theme, themeStats); // ✅ B
@@ -469,7 +471,8 @@ function calculateRecommendationScore(book, childProfile, airtableBooks, themeSt
   let engagementScore = 0;
   const evidence = [];
 
-  bookThemes.forEach(theme => {
+  // 개인화 근거도 최우선 핵심 테마만 사용해 부차적인 소재와 독서 이력을 억지로 연결하지 않는다.
+  bookThemes.slice(0, 1).forEach(theme => {
     const completedCount = childProfile.engagementPatterns.completedThemes[theme] || 0;
     if (completedCount > 0) {
       engagementScore += completedCount * 3;
@@ -797,7 +800,7 @@ async function generateRecommendationReasonsBatch(items, childProfile, airtableB
       description: String(item.book.description || '').slice(0, 240),
       themes,
       recommendationType: item._recType === 'explore' ? '탐색' : '익숙한 취향',
-      ruleReasons,
+      recommendationEvidence: (item.evidence || []).map(formatRecommendationEvidence),
       hasPersonalEvidence,
       fallbackText
     };
@@ -867,7 +870,7 @@ async function generateRecommendationReasonsBatch(items, childProfile, airtableB
         body: JSON.stringify({
           model: 'gpt-5-mini',
           input: [
-            { role: 'developer', content: `${buildHybridSystemPrompt()}\n- 입력된 모든 key를 그대로 보존해 한 번씩 출력하라.` },
+            { role: 'developer', content: `${buildHybridSystemPrompt()}\n- 입력된 모든 key를 그대로 보존해 한 번씩 출력하라.\n- recommendationEvidence는 문장이 아니라 사실 메모다. 그대로 복사하지 말고 자연스러운 문장으로 바꿔라.\n- "읽었어요를", "읽었어요 기록", "좋았어요를"처럼 종결어미 뒤에 조사를 붙이지 마라.` },
             { role: 'user', content: `아이 나이: ${childProfile.ageMonths}개월\n다음 JSON의 각 책에 추천 이유를 작성하라.\n${JSON.stringify(entries.map(({ fallbackText, ...entry }) => entry))}` }
           ],
           reasoning: { effort: 'low' },

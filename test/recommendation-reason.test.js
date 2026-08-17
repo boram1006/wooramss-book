@@ -2,7 +2,8 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const {
   buildFallbackRecommendationReason,
-  cleanGeneratedRecommendationReason
+  cleanGeneratedRecommendationReason,
+  formatRecommendationEvidence
 } = require('../lib/recommendation-reason');
 
 test('AI 추천 이유가 실패해도 책 고유 내용과 읽기 근거를 담은 두 문장을 만든다', () => {
@@ -81,4 +82,9 @@ test('구조화 응답 text 앞에 모델이 반복한 key 번호를 제거한�
     cleanGeneratedRecommendationReason('3: 자연의 재료가 떡이 되는 과정을 따라가요.', '3'),
     '자연의 재료가 떡이 되는 과정을 따라가요.'
   );
+});
+
+test('AI에 전달하는 독서 근거는 종결 문장이 아닌 사실 메모로 바꾼다', () => {
+  assert.equal(formatRecommendationEvidence('가족 테마 완독 2회'), '최근 가족 주제 책 완독 2회');
+  assert.equal(formatRecommendationEvidence('동물·생명 테마 집중 4회'), '동물·생명 주제 책에서 높은 집중 4회');
 });
