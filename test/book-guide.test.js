@@ -97,6 +97,7 @@ test('출력 값의 중복 테마와 불필요한 공백을 정리한다', () =>
 test('프롬프트는 짧은 열린 질문과 안전한 놀이 형식을 강제한다', () => {
   assert.match(SYSTEM_PROMPT, /질문은 정확히 2개/);
   assert.match(SYSTEM_PROMPT, /부모 마음 맞히기/);
+  assert.match(SYSTEM_PROMPT, /두 가지 선택지를 제시하지 않습니다/);
   assert.match(SYSTEM_PROMPT, /준비물: A, B\. 방법: ①/);
   assert.match(SYSTEM_PROMPT, /48개월 미만/);
 });
