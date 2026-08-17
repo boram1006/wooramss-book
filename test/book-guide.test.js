@@ -94,6 +94,27 @@ test('출력 값의 중복 테마와 불필요한 공백을 정리한다', () =>
   assert.equal(guide.activities, '같이 놀아요.');
 });
 
+test('테마가 중복돼도 생성된 부모 가이드와 놀이는 보존한다', async () => {
+  const guide = await generateBookGuide({ isbn: '333', title: '중복 테마 책' }, {
+    apiKey: 'test-key',
+    fetchImpl: async () => jsonResponse({
+      output_text: JSON.stringify({
+        guides: [{
+          key: '333',
+          themes: ['우정', '우정', '용기'],
+          ageRange: '3-5세',
+          parentGuide: '부모 가이드',
+          activities: '연계 놀이'
+        }]
+      })
+    })
+  });
+
+  assert.deepEqual(guide.themes, ['우정', '용기']);
+  assert.equal(guide.parentGuide, '부모 가이드');
+  assert.equal(guide.activities, '연계 놀이');
+});
+
 test('프롬프트는 짧은 열린 질문과 안전한 놀이 형식을 강제한다', () => {
   assert.match(SYSTEM_PROMPT, /질문은 정확히 2개/);
   assert.match(SYSTEM_PROMPT, /부모 마음 맞히기/);

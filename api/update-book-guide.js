@@ -77,12 +77,13 @@ function debugLog(...args) {
         if (!guide?.parentGuide || !guide?.activities) {
           throw new Error(`AI 가이드 생성 결과가 완전하지 않습니다: ${book.id}`);
         }
-        const { error } = await supabase.from('books').update({
-          themes: guide.themes.join(','),
+        const updateFields = {
           age_range: guide.ageRange,
           parent_guide: guide.parentGuide,
           activities: guide.activities
-        }).eq('id', book.id);
+        };
+        if (guide.themes.length) updateFields.themes = guide.themes.join(',');
+        const { error } = await supabase.from('books').update(updateFields).eq('id', book.id);
         if (error) throw new Error(`Supabase update error (${book.id}): ${error.message}`);
         return book.id;
       }));
