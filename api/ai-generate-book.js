@@ -1,4 +1,6 @@
 // AI로 책 정보 생성
+const { generateBookGuide } = require('../lib/book-guide');
+
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
@@ -30,7 +32,7 @@ function debugLog(...args) {
   }
 
   try {
-    const { title, author } = req.body;
+    const { title, author, childAgeMonths } = req.body;
 
     if (!title) {
       return res.status(400).json({ error: 'Title required' });
@@ -64,56 +66,17 @@ function debugLog(...args) {
       console.error('Aladin API error:', e);
     }
 
-    // 2. AI로 가이드 생성
+    // 2. 모든 책 추가 경로가 동일한 문해력 가이드 생성기를 사용한다.
     let aiContent = null;
-    if (aladinData.found && aladinData.설명) {
-      try {
-        const payload = {
-          model: 'gpt-5-mini',
-          max_tokens: 400,
-          temperature: 0.4,
-          messages: [{
-            role: 'user',
-            content: `다음 어린이 책에 대한 가이드를 생성해주세요:
-
-책 제목: ${title}
-저자: ${aladinData.저자}
-출판사: ${aladinData.출판사}
-${aladinData.설명 ? '설명: ' + aladinData.설명 : ''}
-
-다음 항목을 JSON 형식으로만 답변:
-{
-  "테마": "주요 테마 3개 (쉼표 구분)",
-  "연령": "추정 연령대 (예: 3-7세)",
-  "부모_읽기_가이드": "150자 내외 부모 가이드",
-  "연계놀이": "150자 내외 연계 놀이 아이디어"
-}`
-          }]
-        };
-
-        debugLog('[WHY] chat payload temperature =', payload.temperature);
-
-        const aiResponse = await fetch('https://api.openai.com/v1/chat/completions', {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${OPENAI_API_KEY}`,
-            'content-type': 'application/json'
-          },
-          body: JSON.stringify(payload)
-        });
-
-        if (aiResponse.ok) {
-          const aiData = await aiResponse.json();
-          debugLog('[WHY] response status:', aiResponse.status, 'finish_reason:', aiData?.choices?.[0]?.finish_reason);
-          const content = aiData.choices?.[0]?.message?.content || '';
-          const jsonMatch = content.match(/\{[\s\S]*\}/);
-          if (jsonMatch) {
-            aiContent = JSON.parse(jsonMatch[0]);
-          }
-        }
-      } catch (e) {
-        console.error('AI generation error:', e);
-      }
+    try {
+      aiContent = await generateBookGuide({
+        title,
+        author: aladinData.저자 || author || '',
+        publisher: aladinData.출판사 || '',
+        description: aladinData.설명 || ''
+      }, { apiKey: OPENAI_API_KEY, childAgeMonths });
+    } catch (e) {
+      debugLog('[WHY] ai-generate-book guide fallback:', e?.message || e);
     }
 
     // 3. Supabase에 추가
@@ -130,10 +93,10 @@ ${aladinData.설명 ? '설명: ' + aladinData.설명 : ''}
     };
 
     if (aiContent) {
-      if (aiContent.테마) bookData.themes = aiContent.테마;
-      if (aiContent.연령) bookData.age_range = aiContent.연령;
-      if (aiContent.부모_읽기_가이드) bookData.parent_guide = aiContent.부모_읽기_가이드;
-      if (aiContent.연계놀이) bookData.activities = aiContent.연계놀이;
+      if (aiContent.themes?.length) bookData.themes = aiContent.themes.join(',');
+      if (aiContent.ageRange) bookData.age_range = aiContent.ageRange;
+      if (aiContent.parentGuide) bookData.parent_guide = aiContent.parentGuide;
+      if (aiContent.activities) bookData.activities = aiContent.activities;
     }
 
     const { data: newBook, error } = await supabase

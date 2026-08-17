@@ -2,6 +2,7 @@
 // 관심 있는 책 추가 (검색 → AI 가이드 생성 → Supabase 저장)
 
 const { createClient } = require('@supabase/supabase-js');
+const { generateBookGuide } = require('../lib/book-guide');
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 const DEBUG_RECO = process.env.DEBUG_RECO === '1';
 
@@ -70,98 +71,6 @@ async function getBookFromAladin(isbn) {
   }
   
   return data.item[0];
-}
-
-// OpenAI로 AI 가이드 생성
-function parseJsonFromText(text) {
-  const jsonMatch = text.match(/\{[\s\S]*\}/);
-  if (!jsonMatch) return null;
-  try {
-    return JSON.parse(jsonMatch[0]);
-  } catch (e) {
-    return null;
-  }
-}
-
-function extractResponseText(data) {
-  if (typeof data.output_text === 'string' && data.output_text.trim()) {
-    return data.output_text.trim();
-  }
-  if (Array.isArray(data.output)) {
-    for (const item of data.output) {
-      if (!item.content) continue;
-      for (const c of item.content) {
-        if (c.type === 'output_text' && typeof c.text === 'string') {
-          return c.text.trim();
-        }
-      }
-    }
-  }
-  return '';
-}
-
-async function generateAIGuide(bookInfo) {
-  const prompt = `다음 어린이 책에 대한 정보를 분석하여 JSON 형식으로 답변해주세요.
-
-책 정보:
-- 제목: ${bookInfo.title}
-- 저자: ${bookInfo.author}
-- 출판사: ${bookInfo.publisher}
-- 설명: ${bookInfo.description || '정보 없음'}
-
-다음 형식으로 JSON만 출력해주세요:
-{
-  "themes": ["테마1", "테마2", "테마3"],
-  "ageRange": "4-7세",
-  "parentGuide": "부모가 읽어줄 때 주의할 점이나 대화 주제",
-  "activities": "책과 연계한 놀이 활동 제안"
-}`;
-
-  const payload = {
-    model: 'gpt-5-mini',
-    input: [{ role: 'user', content: prompt }],
-    text: {
-      format: { type: 'text' },
-      verbosity: 'low',
-    },
-    reasoning: { effort: 'low' },
-    max_output_tokens: 600
-  };
-
-  for (let attempt = 1; attempt <= 2; attempt += 1) {
-    try {
-      const response = await fetch('https://api.openai.com/v1/responses', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${OPENAI_API_KEY}`
-        },
-        body: JSON.stringify(payload)
-      });
-
-      if (!response.ok) {
-        const errText = await response.text();
-        debugLog('[WHY] add-interested-book ai non-200:', response.status, errText);
-        continue;
-      }
-
-      const data = await response.json();
-      const text = extractResponseText(data);
-      const parsed = parseJsonFromText(text);
-      if (parsed) return parsed;
-
-      debugLog('[WHY] add-interested-book ai parse miss (attempt', attempt + '):', text.slice(0, 200));
-      // 2번째 시도 전에는 출력 형식을 더 강하게 유도
-      payload.input = [{
-        role: 'user',
-        content: `${prompt}\n\n반드시 JSON만 출력하고 다른 설명은 넣지 마세요.`
-      }];
-    } catch (e) {
-      debugLog('[WHY] add-interested-book ai exception:', e?.message || e);
-    }
-  }
-
-  return { themes: [], ageRange: '', parentGuide: '', activities: '' };
 }
 
 // Books 테이블에 책 추가
@@ -248,7 +157,7 @@ module.exports = async (req, res) => {
   }
   
   try {
-    const { isbn } = req.body;
+    const { isbn, childAgeMonths } = req.body;
     
     if (!isbn) {
       return res.status(400).json({ error: 'ISBN이 필요합니다' });
@@ -267,7 +176,13 @@ module.exports = async (req, res) => {
       const bookInfo = await getBookFromAladin(isbn);
       
       console.log('🤖 AI 가이드 생성 중...');
-      const aiGuide = await generateAIGuide(bookInfo);
+      let aiGuide = { themes: [], ageRange: '', parentGuide: '', activities: '' };
+      try {
+        aiGuide = await generateBookGuide(bookInfo, { apiKey: OPENAI_API_KEY, childAgeMonths });
+      } catch (error) {
+        // 가이드 생성 실패가 책 등록 자체를 막지 않도록 기본 정보는 저장한다.
+        debugLog('[WHY] add-interested-book guide fallback:', error?.message || error);
+      }
       
       console.log('💾 Supabase에 저장 중...');
       const newBook = await addBookToSupabase(bookInfo, aiGuide);

@@ -1,4 +1,6 @@
 // 메모 요약 생성 함수 (내부 함수)
+const { generateBookGuides } = require('../lib/book-guide');
+
 async function generateMemoSummary(recordId, memo, supabase, OPENAI_API_KEY) {
   try {
     const prompt = `다음은 아이가 책을 읽은 후 부모가 작성한 메모입니다. 메모를 분석하여 다음 형식으로 JSON만 출력해주세요:
@@ -105,17 +107,64 @@ async function registerReadBooks(req, res, supabase) {
   const isbns = books.map(book => book.isbn);
 
   const { data: existingBooks, error: existingBooksError } = await supabase
-    .from('books').select('id,isbn,title').in('isbn', isbns);
+    .from('books').select('id,isbn,title,parent_guide,activities').in('isbn', isbns);
   if (existingBooksError) throw new Error(`기존 책 조회 실패: ${existingBooksError.message}`);
 
   const existingByIsbn = new Map((existingBooks || []).map(book => [normalizeIsbn(book.isbn), book]));
   const missingBooks = books.filter(book => !existingByIsbn.has(book.isbn));
+  const existingBooksNeedingGuide = (existingBooks || []).filter(book => !book.parent_guide || !book.activities);
+  const guideTargets = [
+    ...missingBooks,
+    ...existingBooksNeedingGuide
+      .map(book => books.find(inputBook => inputBook.isbn === normalizeIsbn(book.isbn)))
+      .filter(Boolean)
+  ];
+  let guides = [];
+
+  if (guideTargets.length) {
+    try {
+      guides = await generateBookGuides(guideTargets, {
+        apiKey: process.env.OPENAI_API_KEY,
+        childAgeMonths: req.body?.childAgeMonths
+      });
+    } catch (error) {
+      // 여러 권 등록에서는 가이드 실패보다 읽기 기록 보존이 우선이다.
+      console.error('여러 권 가이드 생성 실패, 기본 정보로 등록:', error?.message || error);
+    }
+  }
+
+  const guideByIsbn = new Map(guides.map(guide => [normalizeIsbn(guide.key), guide]));
   let insertedBooks = [];
   if (missingBooks.length) {
-    const { data, error } = await supabase.from('books').insert(missingBooks).select('id,isbn,title');
+    const booksWithGuides = missingBooks.map(book => {
+      const guide = guideByIsbn.get(book.isbn);
+      if (!guide?.parentGuide || !guide?.activities) return book;
+      return {
+        ...book,
+        themes: guide.themes.join(','),
+        age_range: guide.ageRange,
+        parent_guide: guide.parentGuide,
+        activities: guide.activities
+      };
+    });
+
+    const { data, error } = await supabase.from('books').insert(booksWithGuides).select('id,isbn,title');
     if (error) throw new Error(`새 책 저장 실패: ${error.message}`);
     insertedBooks = data || [];
   }
+
+  // 이미 등록된 책이라도 가이드가 비어 있으면 사진에서 확인한 책 정보로 보완한다.
+  await Promise.all(existingBooksNeedingGuide.map(async book => {
+    const guide = guideByIsbn.get(normalizeIsbn(book.isbn));
+    if (!guide?.parentGuide || !guide?.activities) return;
+    const { error } = await supabase.from('books').update({
+      themes: guide.themes.join(','),
+      age_range: guide.ageRange,
+      parent_guide: guide.parentGuide,
+      activities: guide.activities
+    }).eq('id', book.id);
+    if (error) console.error(`기존 책 가이드 보완 실패 (${book.id}):`, error.message);
+  }));
 
   const allBooks = [...(existingBooks || []), ...insertedBooks];
   const savedByIsbn = new Map(allBooks.map(book => [normalizeIsbn(book.isbn), book]));

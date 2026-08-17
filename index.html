@@ -2050,6 +2050,7 @@
                             filterType={filterType}
                             books={books}
                             readingLogs={readingLogs}
+                            childAgeMonths={effectiveAgeMonths}
                             onBack={() => {
                                 goHome();
                                 setFilterType(null);
@@ -2063,6 +2064,7 @@
                     {/* 책 추가 모달 */}
                     {showAddForm && (
                         <AddBookModal
+                            childAgeMonths={effectiveAgeMonths}
                             onClose={() => setShowAddForm(false)}
                             onAdd={async (title, author) => {
                                 // 책이 이미 추가되었으므로 새로고침만
@@ -2075,6 +2077,7 @@
                     {/* 책등 사진으로 읽은 책 등록 */}
                     {showReadPhotoModal && (
                         <ReadBooksPhotoModal
+                            childAgeMonths={effectiveAgeMonths}
                             onClose={() => setShowReadPhotoModal(false)}
                             onComplete={async () => {
                                 await loadData();
@@ -2389,7 +2392,10 @@
                                     const response = await fetch('/api/add-interested-book', {
                                         method: 'POST',
                                         headers: { 'Content-Type': 'application/json' },
-                                        body: JSON.stringify({ isbn: selectedAladinBook.isbn })
+                                        body: JSON.stringify({
+                                            isbn: selectedAladinBook.isbn,
+                                            childAgeMonths: effectiveAgeMonths
+                                        })
                                     });
                                     
                                     const data = await response.json();
@@ -2531,7 +2537,7 @@
         }
 
         // 📚 알라딘 API + AI로 책 정보 생성 및 Airtable 추가
-        async function generateBookData(title, author = '') {
+        async function generateBookData(title, author = '', childAgeMonths = '') {
             try {
                 console.log('📖 책 정보 생성 중...');
                 
@@ -2540,7 +2546,7 @@
                     headers: {
                         'Content-Type': 'application/json'
                     },
-                    body: JSON.stringify({ title, author })
+                    body: JSON.stringify({ title, author, childAgeMonths })
                 });
 
                 if (!response.ok) {
@@ -2568,7 +2574,7 @@
             }
         }
 
-        function AddBookModal({ onClose, onAdd }) {
+        function AddBookModal({ onClose, onAdd, childAgeMonths }) {
             const [title, setTitle] = useState('');
             const [searchResults, setSearchResults] = useState([]);
             const [selectedBook, setSelectedBook] = useState(null);
@@ -2779,7 +2785,7 @@
                     const response = await fetch('/api/add-interested-book', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ isbn: selectedBook.isbn })
+                        body: JSON.stringify({ isbn: selectedBook.isbn, childAgeMonths })
                     });
                     
                     const data = await response.json();
@@ -3187,7 +3193,7 @@
             );
         }
 
-        function ReadBooksPhotoModal({ onClose, onComplete }) {
+        function ReadBooksPhotoModal({ onClose, onComplete, childAgeMonths }) {
             const [images, setImages] = useState([]);
             const [results, setResults] = useState([]);
             const [analyzing, setAnalyzing] = useState(false);
@@ -3327,6 +3333,7 @@
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({
                             books: uniqueBooks,
+                            childAgeMonths,
                             logDefaults: {
                                 completed: completedAll,
                                 readDate,
@@ -3816,7 +3823,7 @@
             );
         }
 
-        function FilterView({ filterType, books, readingLogs, onBack, onSelectBook, setShowSearchModal, setShowReadPhotoModal }) {
+        function FilterView({ filterType, books, readingLogs, childAgeMonths, onBack, onSelectBook, setShowSearchModal, setShowReadPhotoModal }) {
             const filterInfo = {
                 'read': { title: '✅ 읽은 책', icon: '✅', color: '#98D8C8' },
                 'loved': { title: '😍 최애 책', icon: '😍', color: '#FFB347' },
@@ -3939,7 +3946,8 @@
                                                             body: JSON.stringify({
                                                                 bookId: book.id,
                                                                 title: book.fields['제목'],
-                                                                author: book.fields['저자']
+                                                                author: book.fields['저자'],
+                                                                childAgeMonths
                                                             })
                                                         });
                                                         
