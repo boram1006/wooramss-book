@@ -3,6 +3,7 @@
 
 const { createClient } = require('@supabase/supabase-js');
 const { normalizeThemes, inferThemes } = require('../lib/theme-taxonomy');
+const { buildFallbackRecommendationReason } = require('../lib/recommendation-reason');
 const ALADIN_API_KEY = process.env.ALADIN_API_KEY || 'ttbcasey862231001';
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 const DEBUG_RECO = process.env.DEBUG_RECO === '1';
@@ -782,6 +783,137 @@ ${description || '(소개 없음)'}
   }
 }
 
+async function generateRecommendationReasonsBatch(items, childProfile, airtableBooks, explicitInterests) {
+  const entries = items.map((item, index) => {
+    const themes = extractThemesFromAladinBook(item.book, airtableBooks).themes;
+    const ruleReasons = buildRuleReasons(
+      item.book,
+      item,
+      childProfile,
+      airtableBooks,
+      explicitInterests,
+      item._recType
+    );
+    const fallbackText = buildFallbackRecommendationReason({
+      title: item.book.title,
+      description: item.book.description,
+      ruleReasons: ruleReasons.length ? ruleReasons : [generateRuleBasedReason(
+        item.book,
+        item,
+        childProfile,
+        explicitInterests,
+        airtableBooks,
+        item._recType
+      )],
+      themes,
+      recType: item._recType
+    });
+    return {
+      key: String(index),
+      title: item.book.title,
+      description: String(item.book.description || '').slice(0, 240),
+      themes,
+      recommendationType: item._recType === 'explore' ? '탐색' : '익숙한 취향',
+      ruleReasons,
+      fallbackText
+    };
+  });
+
+  const fallbackResults = (source) => new Map(entries.map(entry => [entry.key, {
+    text: entry.fallbackText,
+    source
+  }]));
+
+  if (!childProfile.hasData) return fallbackResults('rule_no_data_enriched');
+  if (!OPENAI_API_KEY) return fallbackResults('rule_no_key_enriched');
+
+  const schema = {
+    type: 'object',
+    properties: {
+      reasons: {
+        type: 'array',
+        minItems: entries.length,
+        maxItems: entries.length,
+        items: {
+          type: 'object',
+          properties: {
+            key: { type: 'string' },
+            text: { type: 'string' }
+          },
+          required: ['key', 'text'],
+          additionalProperties: false
+        }
+      }
+    },
+    required: ['reasons'],
+    additionalProperties: false
+  };
+  const banned = ['도움이 됩니다', '성장을 돕습니다', '배울 수 있습니다', '발달에 좋은', '교육적', '상상력을 키', '꼭 읽어보세요', '강력 추천'];
+
+  for (let attempt = 1; attempt <= 3; attempt += 1) {
+    try {
+      const response = await fetch('https://api.openai.com/v1/responses', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${OPENAI_API_KEY}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          model: 'gpt-5-mini',
+          input: [
+            { role: 'developer', content: `${buildHybridSystemPrompt()}\n- 입력된 모든 key를 그대로 보존해 한 번씩 출력하라.` },
+            { role: 'user', content: `아이 나이: ${childProfile.ageMonths}개월\n다음 JSON의 각 책에 추천 이유를 작성하라.\n${JSON.stringify(entries.map(({ fallbackText, ...entry }) => entry))}` }
+          ],
+          reasoning: { effort: 'low' },
+          max_output_tokens: Math.max(1800, entries.length * 350),
+          text: {
+            format: {
+              type: 'json_schema',
+              name: 'book_recommendation_reasons',
+              strict: true,
+              schema
+            },
+            verbosity: 'low'
+          }
+        })
+      });
+      const data = await response.json();
+
+      if (!response.ok) {
+        debugLog('[WHY-BATCH] non-200:', response.status, JSON.stringify(data));
+        if ((response.status === 429 || response.status >= 500) && attempt < 3) {
+          const retryAfter = Number.parseInt(response.headers.get('retry-after') || '', 10);
+          await new Promise(resolve => setTimeout(resolve, Number.isFinite(retryAfter) ? Math.min(retryAfter * 1000, 8000) : attempt * 2000));
+          continue;
+        }
+        return fallbackResults(`rule_openai_${response.status}_enriched`);
+      }
+
+      const outputText = extractResponseText(data);
+      const parsed = JSON.parse(outputText);
+      const generated = new Map((parsed.reasons || []).map(reason => [String(reason.key), String(reason.text || '').trim()]));
+      const results = new Map();
+      for (const entry of entries) {
+        const text = generated.get(entry.key) || '';
+        const invalid = text.length < 60 || banned.some(phrase => text.includes(phrase));
+        results.set(entry.key, invalid
+          ? { text: entry.fallbackText, source: 'rule_batch_guard_enriched' }
+          : { text, source: 'ai_batch' });
+      }
+      return results;
+    } catch (error) {
+      debugLog('[WHY-BATCH] exception:', error?.message || error);
+      if (attempt < 3) {
+        await new Promise(resolve => setTimeout(resolve, attempt * 2000));
+        continue;
+      }
+      return fallbackResults('rule_batch_exception_enriched');
+    }
+  }
+
+  return fallbackResults('rule_batch_exhausted_enriched');
+}
+
 function generateRuleBasedReason(book, scoreData, childProfile, explicitInterests, airtableBooks, recType) {
   const themes = extractThemesFromAladinBook(book, airtableBooks || []).themes;
   const matchedExplicit = (explicitInterests || []).filter(t => themes.includes(t));
@@ -1111,17 +1243,16 @@ module.exports = async (req, res) => {
       finalList.map(x => `${x.book.title} (${Math.round(x.finalScore * 10) / 10})`).join(' | ')
     );
 
-    // 추천 이유 생성
-    const booksWithReason = await Promise.all(
-      finalList.map(async (item) => {
+    // 추천 이유는 신간별 병렬 호출 대신 한 번의 구조화된 요청으로 생성한다.
+    const generatedReasons = await generateRecommendationReasonsBatch(
+      finalList,
+      childProfile,
+      allBooks,
+      explicitInterests
+    );
+    const booksWithReason = finalList.map((item, index) => {
         const isbn = item.book.isbn13 || item.book.isbn;
-        
-        let why;
-        if (childProfile.hasData) {
-          why = await generateRecommendationReason(item.book, item, childProfile, allBooks, explicitInterests, item._recType);
-        } else {
-          why = { text: generateRuleBasedReason(item.book, item, childProfile, explicitInterests, allBooks, item._recType), source: 'rule_no_data' };
-        }
+        const why = generatedReasons.get(String(index));
 
         return {
           isbn,
@@ -1149,8 +1280,7 @@ module.exports = async (req, res) => {
           evidence: item.evidence,
           link: item.book.link
         };
-      })
-    );
+      });
 
     return res.status(200).json({
       success: true,

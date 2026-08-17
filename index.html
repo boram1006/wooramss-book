@@ -383,6 +383,7 @@
             BOOKS_TABLE: 'Books',
             READING_LOG_TABLE: 'ReadingLog'
         };
+        const RECOMMENDATION_CACHE_VERSION = 2;
 
         function computeAgeMonthsFromBirthdate(birthDateString) {
             if (!birthDateString) return null;
@@ -641,9 +642,9 @@
                     try {
                         const cached = localStorage.getItem('today_recommend_cache');
                         if (cached) {
-                            const { date, books, ageMonths: cachedAgeMonths } = JSON.parse(cached);
+                            const { date, books, ageMonths: cachedAgeMonths, version } = JSON.parse(cached);
                             const ageMonthsMatch = effectiveAgeMonths === '' || cachedAgeMonths === effectiveAgeMonths;
-                            if (date === monthKey && books.length > 0 && ageMonthsMatch) {
+                            if (version === RECOMMENDATION_CACHE_VERSION && date === monthKey && books.length > 0 && ageMonthsMatch) {
                                 console.log('📘 오늘의 추천 캐시 사용:', books.length, '권');
                                 setAladinNewBooks(books);
                                 return books;
@@ -706,8 +707,10 @@
                             const today = new Date();
                             const monthKey = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`;
                             localStorage.setItem('today_recommend_cache', JSON.stringify({
+                                version: RECOMMENDATION_CACHE_VERSION,
                                 date: monthKey,
-                                books: filtered
+                                books: filtered,
+                                ageMonths: effectiveAgeMonths
                             }));
                             console.log('📘 오늘의 추천 캐시 저장:', filtered.length, '권');
                         } catch (e) {
