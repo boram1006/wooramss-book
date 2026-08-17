@@ -28,6 +28,24 @@ test('그림책 만들기는 예술·창작을 핵심으로 둔다', () => {
   assert.equal(themes[0], '예술·창작');
 });
 
+test('마음 기차는 기차라는 소재보다 감정을 핵심으로 둔다', () => {
+  const themes = resolveBookThemes(book(
+    '마음 기차',
+    '여러 상황에서 생기는 마음과 감정 낱말을 보여준다.',
+    '탈것·도시,감정 이해'
+  ));
+  assert.equal(themes[0], '감정 이해');
+});
+
+test('도전이 제목의 핵심이면 부차적인 과학보다 용기·도전을 앞세운다', () => {
+  const themes = resolveBookThemes(book(
+    '생쥐 모이의 101번째 도전',
+    '발명가가 되려다 실패를 거듭하는 모이의 이야기다.',
+    '과학·탐구,동물·생명'
+  ));
+  assert.equal(themes[0], '용기·도전');
+});
+
 test('완독 한 번만으로 강한 취향 근거를 만들지 않는다', () => {
   assert.equal(hasStrongPersonalEvidence(['친구·우정 테마 완독 1회']), false);
   assert.equal(hasStrongPersonalEvidence(['친구·우정 테마 완독 2회']), true);
