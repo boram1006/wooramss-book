@@ -399,6 +399,18 @@
                 radial-gradient(circle at 72% 9%, rgba(184, 164, 237, 0.18), transparent 24rem),
                 var(--clay-canvas);
             color: var(--clay-body);
+            font-feature-settings: 'ss01' 1, 'cv05' 1;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        h1, h2, h3, h4 {
+            color: var(--clay-ink);
+            text-wrap: balance;
+        }
+
+        .app-icon {
+            display: block;
+            flex: 0 0 auto;
         }
 
         button,
@@ -467,6 +479,13 @@
             color: var(--clay-body);
             font-size: 14px;
             font-weight: 600;
+        }
+
+        .nav-item > span:first-child {
+            display: grid;
+            place-items: center;
+            width: 24px;
+            color: currentColor;
         }
 
         .nav-item:hover {
@@ -761,6 +780,336 @@
             background: rgba(255, 250, 240, 0.92);
         }
 
+        .clay-button {
+            min-height: 48px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 9px;
+            padding: 0 18px;
+            border: 1px solid var(--clay-line);
+            border-radius: var(--clay-radius-sm);
+            background: var(--clay-canvas);
+            color: var(--clay-ink);
+            font-size: 14px;
+            font-weight: 700;
+            line-height: 1;
+            cursor: pointer;
+        }
+
+        .clay-button-primary {
+            border-color: var(--clay-ink);
+            background: var(--clay-ink);
+            color: white;
+            box-shadow: inset 0 -3px 0 rgba(255, 255, 255, 0.1);
+        }
+
+        .clay-button:hover {
+            transform: translateY(-1px);
+        }
+
+        .catalog-view {
+            padding-bottom: 48px;
+        }
+
+        .view-heading {
+            position: relative;
+            margin-bottom: 26px;
+            padding: clamp(26px, 4vw, 48px);
+            overflow: hidden;
+            border-radius: var(--clay-radius-lg);
+            background: var(--clay-card);
+        }
+
+        .view-heading::after {
+            content: '';
+            position: absolute;
+            width: 180px;
+            height: 180px;
+            right: -42px;
+            bottom: -90px;
+            border-radius: 50%;
+            background: var(--clay-lavender);
+            box-shadow: -128px 66px 0 var(--clay-peach);
+        }
+
+        .view-eyebrow {
+            position: relative;
+            z-index: 1;
+            display: inline-flex;
+            margin-bottom: 12px;
+            padding: 6px 10px;
+            border-radius: 999px;
+            background: var(--clay-ochre);
+            color: var(--clay-ink);
+            font-size: 11px;
+            font-weight: 800;
+            letter-spacing: 0.11em;
+        }
+
+        .view-heading h2 {
+            position: relative;
+            z-index: 1;
+            margin: 0 0 8px;
+            font-size: clamp(40px, 5vw, 64px);
+            font-weight: 500;
+            line-height: 1;
+            letter-spacing: -0.055em;
+        }
+
+        .view-heading p {
+            position: relative;
+            z-index: 1;
+            color: var(--clay-muted);
+            font-size: 15px;
+        }
+
+        .catalog-toolbar {
+            display: flex;
+            align-items: stretch;
+            gap: 10px;
+            margin-bottom: 28px;
+            padding: 10px;
+            border: 1px solid var(--clay-line);
+            border-radius: var(--clay-radius-md);
+            background: rgba(255, 255, 255, 0.58);
+        }
+
+        .catalog-search-wrap {
+            position: relative;
+            flex: 1 1 340px;
+            min-width: 220px;
+        }
+
+        .catalog-search-wrap > .app-icon {
+            position: absolute;
+            z-index: 1;
+            left: 15px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: var(--clay-muted);
+            pointer-events: none;
+        }
+
+        .catalog-search,
+        .catalog-sort {
+            height: 48px;
+            border: 1px solid var(--clay-line);
+            border-radius: var(--clay-radius-sm);
+            background: var(--clay-canvas);
+            color: var(--clay-ink);
+            font-size: 14px;
+            outline: 0;
+        }
+
+        .catalog-search {
+            width: 100%;
+            padding: 0 16px 0 44px;
+        }
+
+        .catalog-search::-webkit-search-cancel-button {
+            opacity: 0.6;
+        }
+
+        .catalog-sort {
+            min-width: 118px;
+            padding: 0 36px 0 14px;
+            cursor: pointer;
+        }
+
+        .catalog-search:focus,
+        .catalog-sort:focus {
+            border-color: var(--clay-ink);
+            box-shadow: 0 0 0 3px rgba(10, 10, 10, 0.06);
+        }
+
+        .catalog-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+            gap: 18px;
+            margin-bottom: 34px;
+        }
+
+        .catalog-grid-item {
+            position: relative;
+            min-width: 0;
+        }
+
+        .library-book-card {
+            position: relative;
+            height: 100%;
+            padding: 14px;
+            overflow: hidden;
+            border: 1px solid var(--clay-line);
+            border-radius: var(--clay-radius-md);
+            background: rgba(255, 255, 255, 0.58);
+            cursor: pointer;
+            transition: transform 180ms ease, border-color 180ms ease, background-color 180ms ease;
+        }
+
+        .library-book-card:hover {
+            transform: translateY(-4px);
+            border-color: var(--clay-ink);
+            background: white;
+        }
+
+        .library-book-card.is-read {
+            background: rgba(164, 212, 197, 0.28);
+            border-color: rgba(26, 58, 58, 0.24);
+        }
+
+        .library-book-status {
+            position: absolute;
+            top: 24px;
+            right: 24px;
+            z-index: 2;
+            min-width: 38px;
+            height: 38px;
+            display: grid;
+            place-items: center;
+            padding: 0 8px;
+            border: 1px solid rgba(10, 10, 10, 0.08);
+            border-radius: 999px;
+            background: rgba(255, 250, 240, 0.94);
+            box-shadow: 0 6px 18px rgba(10, 10, 10, 0.08);
+            font-size: 18px;
+        }
+
+        .library-book-cover {
+            aspect-ratio: 3 / 4;
+            display: grid;
+            place-items: center;
+            margin-bottom: 16px;
+            overflow: hidden;
+            border-radius: 12px;
+            background: var(--clay-card);
+            color: var(--clay-muted);
+        }
+
+        .library-book-cover img {
+            width: 100%;
+            height: 100%;
+            display: block;
+            object-fit: cover;
+        }
+
+        .library-book-cover.is-empty::after {
+            content: '표지 준비 중';
+            color: var(--clay-muted);
+            font-size: 12px;
+        }
+
+        .library-book-card.is-compact .library-book-cover {
+            aspect-ratio: 4 / 3;
+        }
+
+        .library-book-title {
+            display: -webkit-box;
+            min-height: 44px;
+            margin: 0 0 7px;
+            overflow: hidden;
+            color: var(--clay-ink);
+            font-size: 16px;
+            font-weight: 700;
+            line-height: 1.38;
+            letter-spacing: -0.02em;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+        }
+
+        .library-book-meta {
+            min-height: 39px;
+            margin-bottom: 9px;
+            color: var(--clay-muted);
+            font-size: 13px;
+            line-height: 1.5;
+        }
+
+        .library-book-collection {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            margin-bottom: 8px;
+            color: var(--clay-teal);
+            font-size: 12px;
+            font-weight: 700;
+        }
+
+        .library-book-tags {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            margin-top: 12px;
+        }
+
+        .library-book-tags span {
+            padding: 5px 9px;
+            border-radius: 999px;
+            background: var(--clay-card);
+            color: var(--clay-body);
+            font-size: 11px;
+            font-weight: 600;
+        }
+
+        .catalog-empty {
+            display: grid;
+            place-items: center;
+            min-height: 320px;
+            padding: 48px 24px;
+            border: 1px solid var(--clay-line);
+            border-radius: var(--clay-radius-lg);
+            background: var(--clay-soft);
+            text-align: center;
+        }
+
+        .catalog-empty-icon {
+            width: 58px;
+            height: 58px;
+            display: grid;
+            place-items: center;
+            margin-bottom: 16px;
+            border-radius: 18px;
+            background: var(--clay-lavender);
+        }
+
+        .catalog-empty h3 {
+            margin-bottom: 7px;
+            font-size: 20px;
+        }
+
+        .catalog-empty p {
+            color: var(--clay-muted);
+            font-size: 14px;
+        }
+
+        .catalog-pagination {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 7px;
+            flex-wrap: wrap;
+        }
+
+        .catalog-pagination button[style] {
+            min-width: 42px;
+            height: 42px;
+            padding: 0 12px !important;
+            border: 1px solid var(--clay-line) !important;
+            border-radius: 10px !important;
+            background: var(--clay-canvas) !important;
+            color: var(--clay-ink) !important;
+            font-size: 13px;
+            font-weight: 700;
+        }
+
+        .catalog-pagination button[style]:not(:disabled):hover {
+            border-color: var(--clay-ink) !important;
+        }
+
+        .catalog-pagination button[style]:disabled {
+            opacity: 0.38;
+        }
+
         .new-badge {
             background: var(--clay-pink);
             color: white;
@@ -916,6 +1265,90 @@
                 align-items: flex-start;
                 gap: 12px;
             }
+
+            .view-heading {
+                margin-bottom: 18px;
+                padding: 28px 24px;
+            }
+
+            .view-heading h2 {
+                max-width: 76%;
+                font-size: 42px;
+            }
+
+            .view-heading p {
+                max-width: 74%;
+            }
+
+            .view-heading::after {
+                width: 132px;
+                height: 132px;
+                right: -44px;
+                bottom: -52px;
+                box-shadow: -84px 76px 0 var(--clay-peach);
+            }
+
+            .catalog-toolbar {
+                display: grid;
+                grid-template-columns: 1fr auto;
+                gap: 8px;
+                padding: 8px;
+            }
+
+            .catalog-search-wrap {
+                min-width: 0;
+            }
+
+            .catalog-sort {
+                min-width: 106px;
+            }
+
+            .catalog-toolbar .clay-button {
+                grid-column: 1 / -1;
+                width: 100%;
+            }
+
+            .catalog-grid {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+                gap: 10px;
+            }
+
+            .library-book-card {
+                padding: 9px;
+                border-radius: 14px;
+            }
+
+            .library-book-cover {
+                margin-bottom: 12px;
+                border-radius: 9px;
+            }
+
+            .library-book-title {
+                min-height: 40px;
+                font-size: 14px;
+            }
+
+            .library-book-meta {
+                min-height: 36px;
+                font-size: 11px;
+            }
+
+            .library-book-status {
+                top: 16px;
+                right: 16px;
+                min-width: 34px;
+                height: 34px;
+                font-size: 16px;
+            }
+
+            .library-book-tags {
+                gap: 4px;
+            }
+
+            .library-book-tags span {
+                padding: 4px 7px;
+                font-size: 10px;
+            }
         }
 
         @media (prefers-reduced-motion: reduce) {
@@ -970,6 +1403,28 @@
 
             if (months < 0) months = 0;
             return months;
+        }
+
+        function AppIcon({ name, size = 20, strokeWidth = 1.9 }) {
+            const icons = {
+                brand: <><path d="M5 5.5h6.5A2.5 2.5 0 0 1 14 8v11H7.5A2.5 2.5 0 0 0 5 21.5z"/><path d="M19 5.5h-6.5A2.5 2.5 0 0 0 10 8v11h6.5a2.5 2.5 0 0 1 2.5 2.5z"/></>,
+                home: <><path d="m3 11 9-8 9 8"/><path d="M5.5 9.5V21h13V9.5"/><path d="M9.5 21v-7h5v7"/></>,
+                library: <><rect x="4" y="3" width="5" height="18" rx="1.5"/><rect x="10.5" y="3" width="5" height="18" rx="1.5"/><path d="m17 4 3 16"/></>,
+                check: <><circle cx="12" cy="12" r="9"/><path d="m8 12 2.5 2.5L16.5 9"/></>,
+                heart: <path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1.1-1.1a5.5 5.5 0 0 0-7.8 7.8l1.1 1.1L12 21l7.8-7.5 1.1-1.1a5.5 5.5 0 0 0-.1-7.8z"/>,
+                settings: <><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1-2.8 2.8-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.6v.2h-4V21a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0 0 0-1.9.3l-.1.1L4.2 17l.1-.1a1.7 1.7 0 0 0 .3-1.9A1.7 1.7 0 0 0 3 14H2.8v-4H3a1.7 1.7 0 0 0 1.6-1 1.7 1.7 0 0 0-.3-1.9L4.2 7 7 4.2l.1.1A1.7 1.7 0 0 0 9 4.6 1.7 1.7 0 0 0 10 3V2.8h4V3a1.7 1.7 0 0 0 1 1.6 1.7 1.7 0 0 0 1.9-.3l.1-.1L19.8 7l-.1.1a1.7 1.7 0 0 0-.3 1.9 1.7 1.7 0 0 0 1.6 1h.2v4H21a1.7 1.7 0 0 0-1.6 1z"/></>,
+                search: <><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></>,
+                plus: <><path d="M12 5v14M5 12h14"/></>,
+                camera: <><path d="M4 7h3l1.5-2h7L17 7h3v12H4z"/><circle cx="12" cy="13" r="3.5"/></>,
+                sparkle: <><path d="m12 3 1.2 4.1L17 9l-3.8 1.9L12 15l-1.2-4.1L7 9l3.8-1.9z"/><path d="m5 15 .7 2.3L8 18l-2.3.7L5 21l-.7-2.3L2 18l2.3-.7z"/></>,
+                user: <><circle cx="12" cy="8" r="4"/><path d="M4.5 21a7.5 7.5 0 0 1 15 0"/></>
+            };
+
+            return (
+                <svg className="app-icon" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    {icons[name] || icons.brand}
+                </svg>
+            );
         }
 
         function App() {
@@ -1893,7 +2348,7 @@
                     {/* 사이드바 */}
                     <div className={`sidebar ${isSidebarOpen ? 'open' : ''}`}>
                         <div className="sidebar-header">
-                            <span>📚</span>
+                            <span><AppIcon name="brand" size={22} /></span>
                             <span>우람쓰 북가이드</span>
                         </div>
                         <div className="sidebar-nav">
@@ -1905,7 +2360,7 @@
                                     closeSidebarIfMobile();
                                 }}
                             >
-                                <span>🏠</span>
+                                <span><AppIcon name="home" /></span>
                                 <span>대시보드</span>
                             </div>
                             <div 
@@ -1915,7 +2370,7 @@
                                     closeSidebarIfMobile();
                                 }}
                             >
-                                <span>📚</span>
+                                <span><AppIcon name="library" /></span>
                                 <span>전체 책</span>
                             </div>
                             <div 
@@ -1925,7 +2380,7 @@
                                     closeSidebarIfMobile();
                                 }}
                             >
-                                <span>📖</span>
+                                <span><AppIcon name="check" /></span>
                                 <span>읽은 책</span>
                             </div>
                             <div 
@@ -1935,7 +2390,7 @@
                                     closeSidebarIfMobile();
                                 }}
                             >
-                                <span>❤️</span>
+                                <span><AppIcon name="heart" /></span>
                                 <span>관심책</span>
                             </div>
                             <div 
@@ -1945,12 +2400,12 @@
                                     closeSidebarIfMobile();
                                 }}
                             >
-                                <span>⚙️</span>
+                                <span><AppIcon name="settings" /></span>
                                 <span>설정</span>
                             </div>
                         </div>
                         <div className="sidebar-footer">
-                            <div className="profile-avatar">👤</div>
+                            <div className="profile-avatar"><AppIcon name="user" size={21} /></div>
                             <div className="profile-info">
                                 <div className="profile-name">우람이</div>
                                 <div className="profile-role">부모 계정</div>
@@ -1972,7 +2427,7 @@
                             {currentView === 'home' && (
                                 <>
                                     <div className="search-bar">
-                                        <span className="search-icon">🔍</span>
+                                        <span className="search-icon"><AppIcon name="search" size={19} /></span>
                                         <input
                                             type="text"
                                             placeholder="책 제목, 저자, 테마로 검색..."
@@ -1984,7 +2439,7 @@
                                         className="add-book-btn"
                                         onClick={() => setShowAddForm(true)}
                                     >
-                                        <span>➕</span>
+                                        <span><AppIcon name="plus" size={19} /></span>
                                         <span>책 추가</span>
                                     </button>
                                 </>
@@ -2077,7 +2532,7 @@
                                     onClick={() => goHome()}
                                 >
                                     <div className="stat-icon" style={{ background: '#E3F2FD', borderRadius: '12px' }}>
-                                        📚
+                                        <AppIcon name="library" size={22} />
                                     </div>
                                     <div className="stat-value">{stats.total}</div>
                                     <div className="stat-label">전체 책</div>
@@ -2087,7 +2542,7 @@
                                     onClick={() => changeView('filter', { filterType: 'read' })}
                                 >
                                     <div className="stat-icon" style={{ background: '#E8F5E9', borderRadius: '12px' }}>
-                                        📖
+                                        <AppIcon name="check" size={22} />
                                     </div>
                                     <div className="stat-value">{stats.read}</div>
                                     <div className="stat-label">읽은 책</div>
@@ -2097,7 +2552,7 @@
                                     onClick={() => changeView('filter', { filterType: 'interested' })}
                                 >
                                     <div className="stat-icon" style={{ background: '#FFF3E0', borderRadius: '12px' }}>
-                                        ❤️
+                                        <AppIcon name="heart" size={22} />
                                     </div>
                                     <div className="stat-value">{stats.interested}</div>
                                     <div className="stat-label">관심책</div>
@@ -4133,100 +4588,54 @@
         }
 
         function BookCard({ book, log, onClick, compact }) {
-            const [hover, setHover] = useState(false);
             const isRead = !!log;
             const reaction = log?.fields['아이반응'];
             const coverImage = book.fields['표지이미지'];
             
             return (
                 <div
-                    onMouseEnter={() => setHover(true)}
-                    onMouseLeave={() => setHover(false)}
-                    style={{
-                        background: 'white',
-                        borderRadius: '15px',
-                        padding: compact ? '1rem' : '1.5rem',
-                        cursor: 'pointer',
-                        border: isRead ? '2px solid #98D8C8' : '2px solid #FFB6C1',
-                        transition: 'all 0.3s',
-                        transform: hover ? 'translateY(-5px)' : 'translateY(0)',
-                        boxShadow: hover ? '0 8px 16px rgba(0,0,0,0.1)' : '0 2px 8px rgba(0,0,0,0.05)',
-                        position: 'relative'
-                    }}
+                    className={`library-book-card ${isRead ? 'is-read' : ''} ${compact ? 'is-compact' : ''}`}
                 >
                     {isRead && (
-                        <div style={{
-                            position: 'absolute',
-                            top: '0.5rem',
-                            right: '0.5rem',
-                            fontSize: '1.5rem'
-                        }}>
+                        <div className="library-book-status" title="읽은 책">
                             {reaction || '✅'}
                         </div>
                     )}
                     
-                    <div onClick={onClick}>
+                    <div className="library-book-body" onClick={onClick}>
                         {/* 표지 이미지 */}
-                        {coverImage && (
-                            <div style={{
-                                width: '100%',
-                                height: compact ? '120px' : '180px',
-                                marginBottom: '1rem',
-                                borderRadius: '10px',
-                                overflow: 'hidden',
-                                background: '#f5f5f5'
-                            }}>
+                        <div className="library-book-cover">
+                            {coverImage ? (
                                 <img 
                                     src={coverImage} 
                                     alt={book.fields['제목']}
-                                    style={{
-                                        width: '100%',
-                                        height: '100%',
-                                        objectFit: 'cover'
-                                    }}
                                     onError={(e) => {
                                         e.target.style.display = 'none';
+                                        e.target.parentElement.classList.add('is-empty');
                                     }}
                                 />
-                            </div>
-                        )}
+                            ) : <AppIcon name="brand" size={34} />}
+                        </div>
                         
-                        <h3 style={{
-                            fontSize: compact ? '1rem' : '1.2rem',
-                            color: '#333',
-                            marginBottom: '0.5rem',
-                            lineHeight: '1.4',
-                            paddingRight: isRead ? '2rem' : '0'
-                        }}>
+                        <h3 className="library-book-title">
                             {book.fields['제목']}
                         </h3>
                         
-                        <p style={{ fontSize: '0.85rem', color: '#666', marginBottom: '0.5rem' }}>
+                        <p className="library-book-meta">
                             {book.fields['저자']}
                             {book.fields['출판사'] && ` · ${book.fields['출판사']}`}
                         </p>
                         
                         {book.fields['전집명'] && (
-                            <p style={{ 
-                                fontSize: '0.8rem', 
-                                color: '#FF69B4', 
-                                marginBottom: '0.5rem',
-                                fontWeight: 'bold'
-                            }}>
-                                📚 {book.fields['전집명']}
+                            <p className="library-book-collection">
+                                <AppIcon name="library" size={14} /> {book.fields['전집명']}
                             </p>
                         )}
                         
                         {book.fields['테마'] && !compact && (
-                            <div style={{ marginTop: '0.75rem', display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
+                            <div className="library-book-tags">
                                 {book.fields['테마'].split(',').slice(0, 3).map((tema, idx) => (
-                                    <span key={idx} style={{
-                                        background: '#FFE4E1',
-                                        color: '#FF69B4',
-                                        padding: '0.25rem 0.75rem',
-                                        borderRadius: '20px',
-                                        fontSize: '0.7rem'
-                                    }}>
+                                    <span key={idx}>
                                         {tema.trim()}
                                     </span>
                                 ))}
@@ -4326,6 +4735,8 @@
             };
             
             const info = filterInfo[filterType];
+            const [searchTerm, setSearchTerm] = useState('');
+            const [sortBy, setSortBy] = useState('title');
             
             // 필터링
             let filteredBooks = [];
@@ -4350,76 +4761,70 @@
                     return isInterested; // 관심 필드만 확인, 읽기 기록 여부 무시
                 });
             }
+
+            const visibleBooks = filteredBooks
+                .filter(book =>
+                    !searchTerm ||
+                    book.fields['제목']?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                    book.fields['저자']?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                    book.fields['테마']?.toLowerCase().includes(searchTerm.toLowerCase())
+                )
+                .sort((a, b) => {
+                    if (sortBy === 'author') return (a.fields['저자'] || '').localeCompare(b.fields['저자'] || '');
+                    return (a.fields['제목'] || '').localeCompare(b.fields['제목'] || '');
+                });
             
             return (
-                <div>
-                    <h2 style={{ fontSize: '2rem', color: '#FF69B4', marginBottom: '1rem' }}>
-                        {info.title} ({filteredBooks.length}권)
-                    </h2>
+                <div className="catalog-view">
+                    <div className="view-heading">
+                        <span className="view-eyebrow">MY BOOK JOURNEY</span>
+                        <h2>{info.title.replace(/^\S+\s/, '')}</h2>
+                        <p>{filteredBooks.length}권의 책이 이 책장에 담겨 있어요.</p>
+                    </div>
 
-                    {/* 읽은 책 탭: 책등 사진으로 여러 권 등록 */}
-                    {filterType === 'read' && (
-                        <button
-                            onClick={() => setShowReadPhotoModal(true)}
-                            style={{
-                                padding: '0.75rem 1.5rem',
-                                marginBottom: '1.5rem',
-                                background: '#98D8C8',
-                                border: 'none',
-                                borderRadius: '25px',
-                                color: 'white',
-                                fontSize: '1rem',
-                                fontWeight: 'bold',
-                                cursor: 'pointer'
-                            }}
-                        >
-                            📷 책등 사진으로 읽은 책 등록
-                        </button>
-                    )}
+                    <div className="catalog-toolbar">
+                        <label className="catalog-search-wrap">
+                            <AppIcon name="search" size={19} />
+                            <input
+                                className="catalog-search"
+                                type="search"
+                                placeholder="제목, 저자, 테마로 검색"
+                                value={searchTerm}
+                                onChange={(e) => setSearchTerm(e.target.value)}
+                            />
+                        </label>
+                        <select className="catalog-sort" value={sortBy} onChange={(e) => setSortBy(e.target.value)} aria-label="책 정렬">
+                            <option value="title">제목순</option>
+                            <option value="author">저자순</option>
+                        </select>
+                        {filterType === 'read' && (
+                            <button className="clay-button clay-button-primary" onClick={() => setShowReadPhotoModal(true)}>
+                                <AppIcon name="camera" size={19} />
+                                <span>읽은 책 등록</span>
+                            </button>
+                        )}
+                        {filterType === 'interested' && (
+                            <button className="clay-button clay-button-primary" onClick={() => setShowSearchModal(true)}>
+                                <AppIcon name="plus" size={19} />
+                                <span>새 책 검색</span>
+                            </button>
+                        )}
+                    </div>
 
-                    {/* 관심 있는 책 탭에만 검색 버튼 표시 */}
-                    {filterType === 'interested' && (
-                        <button
-                            onClick={() => setShowSearchModal(true)}
-                            style={{
-                                padding: '0.75rem 1.5rem',
-                                marginBottom: '1.5rem',
-                                background: '#FF69B4',
-                                border: 'none',
-                                borderRadius: '25px',
-                                color: 'white',
-                                fontSize: '1rem',
-                                fontWeight: 'bold',
-                                cursor: 'pointer'
-                            }}
-                        >
-                            ➕ 새 책 검색하기
-                        </button>
-                    )}
-
-                    {filteredBooks.length === 0 ? (
-                        <div style={{
-                            textAlign: 'center',
-                            padding: '3rem',
-                            background: 'white',
-                            borderRadius: '15px',
-                            color: '#999'
-                        }}>
-                            <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>📚</div>
-                            <p>아직 없어요!</p>
+                    {visibleBooks.length === 0 ? (
+                        <div className="catalog-empty">
+                            <div className="catalog-empty-icon"><AppIcon name="brand" size={30} /></div>
+                            <h3>{searchTerm ? '검색 결과가 없어요' : '아직 담긴 책이 없어요'}</h3>
+                            <p>{searchTerm ? '다른 제목이나 저자로 다시 찾아보세요.' : '새로운 책을 발견하면 이곳에 차곡차곡 모여요.'}</p>
                         </div>
                     ) : (
-                        <div style={{
-                            display: 'grid',
-                            gridTemplateColumns: 'repeat(auto-fill, minmax(250px, 1fr))',
-                            gap: '1.5rem'
-                        }}>
-                            {filteredBooks.map(book => {
+                        <div className="catalog-grid">
+                            {visibleBooks.map(book => {
                                 const log = readingLogs.find(l => l.fields['책']?.[0] === book.id);
                                 const hasGuide = book.fields['부모_읽기_가이드'] && book.fields['부모_읽기_가이드'].trim();
                                 
                                 return (
-                                    <div key={book.id} style={{ position: 'relative' }}>
+                                    <div key={book.id} className="catalog-grid-item">
                                         <BookCard
                                             book={book}
                                             log={log}
@@ -4518,45 +4923,33 @@
             const paginatedBooks = sortedBooks.slice(startIdx, startIdx + BOOKS_PER_PAGE);
 
             return (
-                <div>
-
-                    <h2 style={{ fontSize: '2rem', color: '#FF69B4', marginBottom: '1rem' }}>
-                        {initialSearchTerm ? `🔍 검색 결과: "${initialSearchTerm}" (${filteredBooks.length}권)` : `📚 전체 도서 (${books.length}권)`}
-                    </h2>
+                <div className="catalog-view">
+                    <div className="view-heading">
+                        <span className="view-eyebrow">WOORAM'S LIBRARY</span>
+                        <h2>{initialSearchTerm ? `“${initialSearchTerm}” 검색 결과` : '전체 책'}</h2>
+                        <p>{initialSearchTerm ? `${filteredBooks.length}권을 찾았어요.` : `${books.length}권의 이야기를 한눈에 살펴보세요.`}</p>
+                    </div>
 
                     {/* 검색 & 정렬 */}
-                    <div style={{
-                        display: 'flex',
-                        gap: '1rem',
-                        marginBottom: '1.5rem',
-                        flexWrap: 'wrap'
-                    }}>
-                        <input
-                            type="text"
-                            placeholder="제목, 저자, 테마로 검색..."
-                            value={searchTerm}
-                            onChange={(e) => {
-                                setSearchTerm(e.target.value);
-                                setCurrentPage(1);
-                            }}
-                            style={{
-                                flex: 1,
-                                padding: '0.75rem',
-                                border: '2px solid #FFB6C1',
-                                borderRadius: '10px',
-                                fontSize: '1rem'
-                            }}
-                        />
+                    <div className="catalog-toolbar">
+                        <label className="catalog-search-wrap">
+                            <AppIcon name="search" size={19} />
+                            <input
+                                className="catalog-search"
+                                type="search"
+                                placeholder="제목, 저자, 테마로 검색"
+                                value={searchTerm}
+                                onChange={(e) => {
+                                    setSearchTerm(e.target.value);
+                                    setCurrentPage(1);
+                                }}
+                            />
+                        </label>
                         <select
+                            className="catalog-sort"
                             value={sortBy}
                             onChange={(e) => setSortBy(e.target.value)}
-                            style={{
-                                padding: '0.75rem',
-                                border: '2px solid #FFB6C1',
-                                borderRadius: '10px',
-                                fontSize: '1rem',
-                                background: 'white'
-                            }}
+                            aria-label="책 정렬"
                         >
                             <option value="title">제목순</option>
                             <option value="author">저자순</option>
@@ -4564,12 +4957,7 @@
                     </div>
 
                     {/* 책 그리드 */}
-                    <div style={{
-                        display: 'grid',
-                        gridTemplateColumns: 'repeat(auto-fill, minmax(250px, 1fr))',
-                        gap: '1.5rem',
-                        marginBottom: '2rem'
-                    }}>
+                    <div className="catalog-grid">
                         {paginatedBooks.map(book => {
                             const log = readingLogs.find(l => l.fields['책']?.[0] === book.id);
                             return (
@@ -4585,12 +4973,7 @@
 
                     {/* 페이지네이션 */}
                     {totalPages > 1 && (
-                        <div style={{
-                            display: 'flex',
-                            justifyContent: 'center',
-                            gap: '0.5rem',
-                            flexWrap: 'wrap'
-                        }}>
+                        <div className="catalog-pagination">
                             <button
                                 onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
                                 disabled={currentPage === 1}
