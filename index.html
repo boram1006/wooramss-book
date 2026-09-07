@@ -425,6 +425,53 @@
             -webkit-tap-highlight-color: transparent;
         }
 
+        button {
+            border-radius: var(--clay-radius-sm) !important;
+            font-weight: 700 !important;
+            letter-spacing: -0.01em;
+            box-shadow: none !important;
+            transition: transform 160ms ease, background-color 160ms ease, border-color 160ms ease;
+        }
+
+        button:not(:disabled):hover {
+            transform: translateY(-1px);
+        }
+
+        button[style*='#FF69B4'],
+        button[style*='#98D8C8'],
+        button[style*='#8B7EC8'],
+        button[style*='#ff69b4'],
+        button[style*='#98d8c8'],
+        button[style*='#8b7ec8'] {
+            border-color: var(--clay-ink) !important;
+            background: var(--clay-ink) !important;
+            color: white !important;
+        }
+
+        button:disabled {
+            border-color: var(--clay-line) !important;
+            background: #e5e5e5 !important;
+            color: #8b8881 !important;
+            cursor: not-allowed !important;
+        }
+
+        input[style],
+        select[style],
+        textarea[style] {
+            border: 1px solid var(--clay-line) !important;
+            border-radius: var(--clay-radius-sm) !important;
+            background: var(--clay-canvas) !important;
+            color: var(--clay-ink) !important;
+            box-shadow: none !important;
+        }
+
+        input[style]:focus,
+        select[style]:focus,
+        textarea[style]:focus {
+            border-color: var(--clay-ink) !important;
+            outline: 3px solid rgba(10, 10, 10, 0.06) !important;
+        }
+
         button:focus-visible,
         input:focus-visible,
         select:focus-visible,
