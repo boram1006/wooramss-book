@@ -7,8 +7,10 @@ const {
   inferThemes
 } = require('../lib/theme-taxonomy');
 const {
+  loadThemeClassifications,
   loadThemeOverrides,
-  recordUnclassifiedObservations
+  recordUnclassifiedObservations,
+  validateClassification
 } = require('../lib/theme-classification-store');
 
 function getSupabaseClient() {
@@ -74,12 +76,45 @@ function calculateAutomaticInterests(books, logs, overrides) {
 
 module.exports = async (req, res) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  res.setHeader('Cache-Control', 'no-store');
   if (req.method === 'OPTIONS') return res.status(200).end();
-  if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
+  if (!['GET', 'POST'].includes(req.method)) return res.status(405).json({ error: 'Method not allowed' });
 
   try {
     const supabase = getSupabaseClient();
+    const mode = String(req.query.mode || '');
+
+    if (mode === 'classifications' && req.method === 'GET') {
+      return res.status(200).json({
+        success: true,
+        groups: THEME_GROUPS,
+        items: await loadThemeClassifications(supabase)
+      });
+    }
+
+    if (mode === 'classifications' && req.method === 'POST') {
+      const validation = validateClassification(req.body);
+      if (validation.error) return res.status(400).json({ success: false, error: validation.error });
+
+      const { normalizedExpression, status, mappedTheme } = validation.value;
+      const { data, error } = await supabase
+        .from('unclassified_theme_logs')
+        .update({
+          status,
+          mapped_theme: mappedTheme,
+          resolved_at: status === 'mapped' || status === 'excluded' ? new Date().toISOString() : null
+        })
+        .eq('normalized_expression', normalizedExpression)
+        .select('*')
+        .single();
+      if (error) throw error;
+      return res.status(200).json({ success: true, item: data });
+    }
+
+    if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
+
     const [books, logs, overrides] = await Promise.all([
       fetchAll(supabase, 'books'),
       fetchAll(supabase, 'reading_logs'),
@@ -115,7 +150,12 @@ module.exports = async (req, res) => {
       }))
     });
   } catch (error) {
-    return res.status(500).json({ success: false, error: error.message });
+    const setupRequired = error?.code === '42P01' || /unclassified_theme_logs|record_unclassified_theme/.test(error.message || '');
+    return res.status(setupRequired ? 503 : 500).json({
+      success: false,
+      setupRequired,
+      error: setupRequired ? '분류 관리 저장소를 준비하는 중입니다.' : error.message
+    });
   }
 };
 

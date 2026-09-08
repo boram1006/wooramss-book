@@ -6286,7 +6286,7 @@
                 setClassificationLoading(true);
                 setClassificationError('');
                 try {
-                    const response = await fetch('/api/theme-classifications', { cache: 'no-store' });
+                    const response = await fetch('/api/interest-candidates?mode=classifications', { cache: 'no-store' });
                     const contentType = response.headers.get('content-type') || '';
                     if (!contentType.includes('application/json')) throw new Error('분류 관리 기능을 준비하는 중입니다.');
                     const data = await response.json();
@@ -6323,7 +6323,7 @@
                 setClassificationBusy(item.normalized_expression);
                 setClassificationError('');
                 try {
-                    const response = await fetch('/api/theme-classifications', {
+                    const response = await fetch('/api/interest-candidates?mode=classifications', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({

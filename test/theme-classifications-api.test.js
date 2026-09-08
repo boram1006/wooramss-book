@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { validateClassification } = require('../api/theme-classifications');
+const { validateClassification } = require('../lib/theme-classification-store');
 
 test('기존 표준 테마 연결 요청을 검증한다', () => {
   assert.deepEqual(validateClassification({
