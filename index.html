@@ -383,6 +383,9 @@
             --clay-ochre: #e8b94a;
             --clay-mint: #a4d4c5;
             --clay-coral: #ff6b5a;
+            --clay-action: #315b55;
+            --clay-action-hover: #274c47;
+            --clay-action-soft: #e2eee9;
             --clay-radius-sm: 12px;
             --clay-radius-md: 16px;
             --clay-radius-lg: 24px;
@@ -445,8 +448,8 @@
         button[style*='#ff69b4'],
         button[style*='#98d8c8'],
         button[style*='#8b7ec8'] {
-            border-color: var(--clay-ink) !important;
-            background: var(--clay-ink) !important;
+            border-color: var(--clay-action) !important;
+            background: var(--clay-action) !important;
             color: white !important;
         }
 
@@ -543,8 +546,8 @@
         }
 
         .nav-item.active {
-            background: var(--clay-ink);
-            color: white;
+            background: var(--clay-action-soft);
+            color: var(--clay-action);
         }
 
         .sidebar-footer {
@@ -615,14 +618,15 @@
         .menu-button {
             min-height: 48px;
             border-radius: var(--clay-radius-sm);
-            background: var(--clay-ink);
+            border-color: var(--clay-action);
+            background: var(--clay-action);
             color: white;
             box-shadow: inset 0 -3px 0 rgba(255, 255, 255, 0.1);
         }
 
         .add-book-btn:hover,
         .menu-button:hover {
-            background: #1f1f1f;
+            background: var(--clay-action-hover);
             transform: translateY(-1px);
         }
 
@@ -848,8 +852,8 @@
         }
 
         .clay-button-primary {
-            border-color: var(--clay-ink);
-            background: var(--clay-ink);
+            border-color: var(--clay-action);
+            background: var(--clay-action);
             color: white;
             box-shadow: inset 0 -3px 0 rgba(255, 255, 255, 0.1);
         }
@@ -1162,7 +1166,7 @@
         }
 
         .catalog-pagination button[style]:not(:disabled):hover {
-            border-color: var(--clay-ink) !important;
+            border-color: var(--clay-action) !important;
         }
 
         .catalog-pagination button[style]:disabled {
@@ -1213,7 +1217,7 @@
         }
 
         .section button[style]:hover {
-            border-color: var(--clay-ink) !important;
+            border-color: var(--clay-action) !important;
         }
 
         .horizontal-scroll::-webkit-scrollbar-track {
@@ -1338,9 +1342,9 @@
             align-items: center;
             justify-content: center;
             gap: 8px;
-            border: 1px solid var(--clay-ink) !important;
+            border: 1px solid var(--clay-action) !important;
             border-radius: var(--clay-radius-sm) !important;
-            background: var(--clay-ink) !important;
+            background: var(--clay-action) !important;
             color: white !important;
             font-size: 14px !important;
             font-weight: 600 !important;
