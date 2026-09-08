@@ -3,7 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>우람쓰 북가이드</title>
+    <title>우람이랑 도란도란</title>
+    <meta name="application-name" content="우람이랑 도란도란">
+    <meta name="apple-mobile-web-app-title" content="도란도란">
+    <meta property="og:title" content="우람이랑 도란도란">
     <link href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+KR:wght@500;600&display=swap" rel="stylesheet">
     <style>
@@ -2782,7 +2785,7 @@
                     <div className={`sidebar ${isSidebarOpen ? 'open' : ''}`}>
                         <div className="sidebar-header">
                             <span><AppIcon name="brand" size={22} /></span>
-                            <span>우람쓰 북가이드</span>
+                            <span>도란도란</span>
                         </div>
                         <div className="sidebar-nav">
                             <div 
@@ -2945,12 +2948,12 @@
                             {/* 환영 섹션 */}
                             <div className="welcome-section">
                                 <div className="welcome-copy">
-                                    <span className="welcome-eyebrow">WOORAM'S READING CLUB</span>
+                                    <span className="welcome-eyebrow">DORANDORAN READING CLUB</span>
                                     <h1 className="welcome-title">
-                                        오늘, 어떤 이야기를 펼쳐볼까요?
+                                        우람이랑 도란도란
                                     </h1>
                                     <p className="welcome-subtitle">
-                                        우람이의 마음과 호기심에 꼭 맞는 책을 발견하고, 함께 읽은 순간을 차곡차곡 기록해요.
+                                        오늘, 어떤 이야기를 펼쳐볼까요? 우람이의 마음과 호기심에 꼭 맞는 책을 발견하고, 함께 읽은 순간을 차곡차곡 기록해요.
                                     </p>
                                 </div>
                                 <div className="welcome-art" aria-hidden="true">
@@ -5382,7 +5385,7 @@
             return (
                 <div className="catalog-view">
                     <div className="view-heading">
-                        <span className="view-eyebrow">WOORAM'S LIBRARY</span>
+                        <span className="view-eyebrow">DORANDORAN LIBRARY</span>
                         <h2>{initialSearchTerm ? `“${initialSearchTerm}” 검색 결과` : '전체 책'}</h2>
                         <p>{initialSearchTerm ? `${filteredBooks.length}권을 찾았어요.` : `${books.length}권의 이야기를 한눈에 살펴보세요.`}</p>
                     </div>
