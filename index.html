@@ -1214,12 +1214,59 @@
 
         .loading {
             min-height: 100vh;
-            display: grid;
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
             place-items: center;
+            align-items: center;
+            justify-content: center;
             background: var(--clay-canvas);
             color: var(--clay-ink);
-            font-size: 18px;
+            font-size: 15px;
             font-weight: 600;
+        }
+
+        .loading-mark,
+        .modal-title-mark {
+            display: grid;
+            place-items: center;
+            border-radius: 14px;
+            background: var(--clay-pink);
+            color: var(--clay-ink);
+        }
+
+        .loading-mark {
+            width: 52px;
+            height: 52px;
+            animation: clay-loading 1.15s ease-in-out infinite alternate;
+        }
+
+        @keyframes clay-loading {
+            from { transform: translateY(0) rotate(-3deg); }
+            to { transform: translateY(-7px) rotate(3deg); }
+        }
+
+        .recommendation-label {
+            display: flex;
+            align-items: center;
+            gap: 7px;
+            color: var(--clay-teal) !important;
+            font-weight: 700 !important;
+            letter-spacing: -0.01em;
+        }
+
+        .modal-title {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            color: var(--clay-ink) !important;
+            font-weight: 600 !important;
+            letter-spacing: -0.04em;
+        }
+
+        .modal-title-mark {
+            width: 40px;
+            height: 40px;
         }
 
         @media (max-width: 1024px) {
@@ -2383,7 +2430,12 @@
                 .map(([theme]) => theme);
 
             if (loading) {
-                return <div className="loading">📚 도서 정보를 불러오는 중...</div>;
+                return (
+                    <div className="loading">
+                        <span className="loading-mark"><AppIcon name="brand" size={24} /></span>
+                        <span>도서 정보를 불러오는 중...</span>
+                    </div>
+                );
             }
 
             return (
@@ -2737,13 +2789,14 @@
                                                             color: '#333',
                                                             lineHeight: '1.5'
                                                         }}>
-                                                            <div style={{
+                                                            <div className="recommendation-label" style={{
                                                                 fontSize: '0.75rem',
                                                                 color: '#666',
                                                                 fontWeight: '600',
                                                                 marginBottom: '0.5rem'
                                                             }}>
-                                                                💝 우리아이에게 추천하는 이유
+                                                                <AppIcon name="sparkle" size={15} />
+                                                                <span>우리아이에게 추천하는 이유</span>
                                                             </div>
                                                             <div>
                                                                 {item.recommendationReason}
@@ -2960,13 +3013,14 @@
                                                         color: '#333',
                                                         lineHeight: '1.5'
                                                     }}>
-                                                        <div style={{
+                                                        <div className="recommendation-label" style={{
                                                             fontSize: '0.75rem',
                                                             color: '#666',
                                                             fontWeight: '600',
                                                             marginBottom: '0.5rem'
                                                         }}>
-                                                            💝 우리아이에게 추천하는 이유
+                                                            <AppIcon name="sparkle" size={15} />
+                                                            <span>우리아이에게 추천하는 이유</span>
                                                         </div>
                                                         <div>
                                                             {book.recommendationReason || '이 책의 추천 이유를 준비하고 있어요.'}
@@ -6084,8 +6138,9 @@
                         overflow: 'auto'
                     }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '1.5rem' }}>
-                            <h2 style={{ fontSize: '1.8rem', color: '#FF69B4', margin: 0 }}>
-                                📘 신간 도서
+                            <h2 className="modal-title" style={{ fontSize: '1.8rem', color: '#FF69B4', margin: 0 }}>
+                                <span className="modal-title-mark"><AppIcon name="brand" size={20} /></span>
+                                <span>신간 도서</span>
                             </h2>
                             <button
                                 onClick={onClose}
@@ -6150,13 +6205,14 @@
                                         fontSize: '0.9rem',
                                         lineHeight: '1.6'
                                     }}>
-                                        <div style={{
+                                        <div className="recommendation-label" style={{
                                             fontSize: '0.75rem',
                                             color: '#FF69B4',
                                             fontWeight: 'bold',
                                             marginBottom: '0.5rem'
                                         }}>
-                                            💝 우리아이에게 추천하는 이유
+                                            <AppIcon name="sparkle" size={15} />
+                                            <span>우리아이에게 추천하는 이유</span>
                                         </div>
                                         <div>{book.recommendationReason}</div>
                                     </div>
