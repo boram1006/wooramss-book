@@ -1260,13 +1260,157 @@
             align-items: center;
             gap: 12px;
             color: var(--clay-ink) !important;
-            font-weight: 600 !important;
+            font-weight: 500 !important;
             letter-spacing: -0.04em;
         }
 
         .modal-title-mark {
             width: 40px;
             height: 40px;
+        }
+
+        .clay-modal-overlay {
+            background: rgba(10, 26, 26, 0.52) !important;
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
+        }
+
+        .clay-modal-panel {
+            position: relative;
+            background: var(--clay-canvas) !important;
+            border: 1px solid rgba(255, 255, 255, 0.5);
+            border-radius: var(--clay-radius-lg) !important;
+            box-shadow: 0 24px 70px rgba(10, 26, 26, 0.18) !important;
+            color: var(--clay-body);
+            animation: clay-modal-enter 180ms ease-out;
+        }
+
+        @keyframes clay-modal-enter {
+            from { opacity: 0; transform: translateY(12px) scale(0.985); }
+            to { opacity: 1; transform: translateY(0) scale(1); }
+        }
+
+        .clay-modal-panel h2,
+        .clay-modal-panel h3,
+        .clay-modal-panel h4,
+        .clay-modal-panel strong {
+            color: var(--clay-ink) !important;
+        }
+
+        .clay-modal-panel p {
+            color: var(--clay-muted) !important;
+        }
+
+        .clay-modal-panel input:not([type="checkbox"]):not([type="radio"]),
+        .clay-modal-panel textarea,
+        .clay-modal-panel select {
+            border: 1px solid var(--clay-line) !important;
+            border-radius: var(--clay-radius-sm) !important;
+            background: var(--clay-canvas) !important;
+            color: var(--clay-ink) !important;
+            font-family: inherit;
+            outline: none;
+        }
+
+        .clay-modal-panel input:not([type="checkbox"]):not([type="radio"]):focus,
+        .clay-modal-panel textarea:focus,
+        .clay-modal-panel select:focus {
+            border-color: var(--clay-ink) !important;
+            box-shadow: 0 0 0 3px rgba(10, 10, 10, 0.06);
+        }
+
+        .clay-modal-panel button:not(.modal-close-button):not(.modal-choice-button):not(.modal-secondary-button) {
+            min-height: 44px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            border: 1px solid var(--clay-ink) !important;
+            border-radius: var(--clay-radius-sm) !important;
+            background: var(--clay-ink) !important;
+            color: white !important;
+            font-size: 14px !important;
+            font-weight: 600 !important;
+            box-shadow: none !important;
+        }
+
+        .clay-modal-panel button:disabled {
+            border-color: var(--clay-line) !important;
+            background: var(--clay-card) !important;
+            color: var(--clay-muted) !important;
+            cursor: not-allowed !important;
+        }
+
+        .modal-close-button {
+            width: 40px;
+            min-width: 40px;
+            height: 40px;
+            display: grid;
+            place-items: center;
+            padding: 0 !important;
+            border: 1px solid var(--clay-line) !important;
+            border-radius: 50% !important;
+            background: var(--clay-soft) !important;
+            color: var(--clay-ink) !important;
+            font-size: 20px !important;
+        }
+
+        .modal-secondary-button {
+            min-height: 44px;
+            border: 1px solid var(--clay-line) !important;
+            border-radius: var(--clay-radius-sm) !important;
+            background: var(--clay-canvas) !important;
+            color: var(--clay-ink) !important;
+            font-size: 14px !important;
+            font-weight: 600 !important;
+        }
+
+        .modal-choice-button {
+            min-height: 44px;
+            border-radius: var(--clay-radius-sm) !important;
+            color: var(--clay-ink) !important;
+            font-weight: 600;
+            box-shadow: none !important;
+        }
+
+        .modal-section-surface {
+            background: var(--clay-card) !important;
+            border: 1px solid var(--clay-line) !important;
+            border-radius: var(--clay-radius-md) !important;
+        }
+
+        .modal-book-cover {
+            border-radius: var(--clay-radius-md) !important;
+            box-shadow: none !important;
+            border: 1px solid var(--clay-line);
+        }
+
+        .modal-upload-zone {
+            display: flex !important;
+            align-items: center;
+            justify-content: center;
+            gap: 9px;
+            border-style: dashed !important;
+            border-color: var(--clay-teal) !important;
+            color: var(--clay-teal) !important;
+        }
+
+        .modal-rating-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            background: rgba(255, 77, 139, 0.12) !important;
+            color: var(--clay-ink) !important;
+        }
+
+        @media (max-width: 640px) {
+            .clay-modal-overlay { align-items: flex-end !important; padding: 0 !important; }
+            .clay-modal-panel {
+                max-height: 92vh !important;
+                padding: 24px 18px !important;
+                border-radius: 24px 24px 0 0 !important;
+            }
+            .modal-title { font-size: 24px !important; }
         }
 
         @media (max-width: 1024px) {
@@ -3139,7 +3283,7 @@
 
                     {/* 검색 모달 */}
                     {showSearchModal && (
-                        <div style={{
+                        <div className="clay-modal-overlay" style={{
                             position: 'fixed',
                             top: 0,
                             left: 0,
@@ -3160,7 +3304,8 @@
                             setShowSearchModal(false);
                         }}
                         >
-                            <div 
+                            <div
+                                className="clay-modal-panel clay-modal-panel-search"
                                 style={{
                                     background: 'white',
                                     borderRadius: '20px',
@@ -3172,7 +3317,10 @@
                                 }}
                                 onClick={(e) => e.stopPropagation()}
                             >
-                                <h2 style={{ marginBottom: '1.5rem', color: '#FF69B4' }}>📚 책 검색하기</h2>
+                                <h2 className="modal-title" style={{ marginBottom: '1.5rem', color: '#FF69B4' }}>
+                                    <span className="modal-title-mark"><AppIcon name="search" size={20} /></span>
+                                    <span>책 검색하기</span>
+                                </h2>
                                 {!searchScanOpen ? (
                                     <button
                                         onClick={handleSearchScanStart}
@@ -3189,7 +3337,8 @@
                                             cursor: 'pointer'
                                         }}
                                     >
-                                        📷 바코드로 검색
+                                        <AppIcon name="camera" size={17} />
+                                        <span>바코드로 검색</span>
                                     </button>
                                 ) : (
                                     <div style={{ marginBottom: '1rem' }}>
@@ -3259,7 +3408,8 @@
                                                     cursor: searchScanDecoding ? 'not-allowed' : 'pointer'
                                                 }}
                                             >
-                                                🔄 다시 찍기
+                                                <AppIcon name="camera" size={17} />
+                                                <span>다시 찍기</span>
                                             </button>
                                         ) : (
                                             <button
@@ -3277,7 +3427,8 @@
                                                     cursor: (searchScanDecoding || !searchScanReady) ? 'not-allowed' : 'pointer'
                                                 }}
                                             >
-                                                📸 사진 찍기
+                                                <AppIcon name="camera" size={17} />
+                                                <span>사진 찍기</span>
                                             </button>
                                         )}
                                         <button
@@ -3339,7 +3490,7 @@
                                 
                                 {searchLoading && (
                                     <div style={{ textAlign: 'center', padding: '2rem', color: '#FF69B4' }}>
-                                        🔍 검색 중...
+                                        검색 중...
                                     </div>
                                 )}
                                 
@@ -3386,7 +3537,8 @@
                                                             cursor: 'pointer'
                                                         }}
                                                     >
-                                                        💡 관심 있는 책 추가
+                                                        <AppIcon name="heart" size={16} />
+                                                        <span>관심 있는 책 추가</span>
                                                     </button>
                                                 </div>
                                             </div>
@@ -3394,7 +3546,7 @@
                                     </div>
                                 )}
                                 
-                                <button
+                                <button className="modal-secondary-button"
                                     onClick={() => {
                                         stopSearchCamera();
                                         setSearchScanOpen(false);
@@ -3855,7 +4007,7 @@
             };
 
             return (
-                <div onClick={onClose} style={{
+                <div className="clay-modal-overlay" onClick={onClose} style={{
                     position: 'fixed',
                     top: 0,
                     left: 0,
@@ -3868,7 +4020,7 @@
                     zIndex: 1000,
                     padding: '1rem'
                 }}>
-                    <div onClick={(e) => e.stopPropagation()} style={{
+                    <div className="clay-modal-panel clay-modal-panel-add" onClick={(e) => e.stopPropagation()} style={{
                         background: 'white',
                         borderRadius: '20px',
                         padding: '2rem',
@@ -3895,8 +4047,9 @@
                                 </div>
                             </div>
                         )}
-                        <h2 style={{ fontSize: '1.8rem', color: '#FF69B4', marginBottom: '1rem' }}>
-                            ➕ 새 책 추가
+                        <h2 className="modal-title" style={{ fontSize: '1.8rem', color: '#FF69B4', marginBottom: '1rem' }}>
+                            <span className="modal-title-mark"><AppIcon name="plus" size={20} /></span>
+                            <span>새 책 추가</span>
                         </h2>
                         
                         {!selectedBook ? (
@@ -3922,7 +4075,8 @@
                                             marginBottom: '1rem'
                                         }}
                                     >
-                                        📷 바코드 사진 찍기
+                                        <AppIcon name="camera" size={17} />
+                                        <span>바코드 사진 찍기</span>
                                     </button>
                                 ) : (
                                     <div style={{ marginBottom: '1rem' }}>
@@ -3992,7 +4146,8 @@
                                                     cursor: isDecoding ? 'not-allowed' : 'pointer'
                                                 }}
                                             >
-                                                🔄 다시 찍기
+                                                <AppIcon name="camera" size={17} />
+                                                <span>다시 찍기</span>
                                             </button>
                                         ) : (
                                             <button
@@ -4010,7 +4165,8 @@
                                                     cursor: (isDecoding || !isCameraReady) ? 'not-allowed' : 'pointer'
                                                 }}
                                             >
-                                                📸 사진 찍기
+                                                <AppIcon name="camera" size={17} />
+                                                <span>사진 찍기</span>
                                             </button>
                                         )}
                                     </div>
@@ -4048,7 +4204,8 @@
                                             cursor: searching || !title.trim() ? 'not-allowed' : 'pointer'
                                         }}
                                     >
-                                        {searching ? '검색 중...' : '🔍 검색'}
+                                        <AppIcon name="search" size={17} />
+                                        <span>{searching ? '검색 중...' : '검색'}</span>
                                     </button>
                                 </div>
 
@@ -4100,7 +4257,7 @@
                                 )}
                             </>
                         ) : (
-                            <div style={{
+                            <div className="modal-section-surface" style={{
                                 padding: '1rem',
                                 background: '#F8F9FA',
                                 borderRadius: '10px',
@@ -4144,10 +4301,11 @@
                                     cursor: loading || !selectedBook ? 'not-allowed' : 'pointer'
                                 }}
                             >
-                                {loading ? '⏳ 추가 중...' : '✅ 추가하기'}
+                                <AppIcon name="plus" size={17} />
+                                <span>{loading ? '추가 중...' : '추가하기'}</span>
                             </button>
                             
-                            <button
+                            <button className="modal-secondary-button"
                                 onClick={handleClose}
                                 disabled={loading}
                                 style={{
@@ -4419,6 +4577,7 @@
 
             return (
                 <div
+                    className="clay-modal-overlay"
                     onClick={() => !busy && onClose()}
                     style={{
                         position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.55)',
@@ -4427,6 +4586,7 @@
                     }}
                 >
                     <div
+                        className="clay-modal-panel clay-modal-panel-photo"
                         onClick={(event) => event.stopPropagation()}
                         style={{
                             background: 'white', borderRadius: '20px', width: '100%', maxWidth: '720px',
@@ -4435,12 +4595,15 @@
                     >
                         <div style={{ display: 'flex', justifyContent: 'space-between', gap: '1rem', alignItems: 'flex-start' }}>
                             <div>
-                                <h2 style={{ color: '#FF69B4', marginBottom: '0.35rem' }}>📷 책등 사진으로 등록</h2>
+                                <h2 className="modal-title" style={{ color: '#FF69B4', marginBottom: '0.35rem' }}>
+                                    <span className="modal-title-mark"><AppIcon name="camera" size={20} /></span>
+                                    <span>책등 사진으로 등록</span>
+                                </h2>
                                 <p style={{ color: '#666', lineHeight: 1.5, fontSize: '0.92rem' }}>
                                     책등이 크게 보이는 사진을 최대 3장까지 올려주세요. 인식 결과를 확인한 뒤 등록합니다.
                                 </p>
                             </div>
-                            <button
+                            <button className="modal-close-button"
                                 onClick={onClose}
                                 disabled={busy}
                                 aria-label="닫기"
@@ -4448,12 +4611,13 @@
                             >×</button>
                         </div>
 
-                        <label style={{
+                        <label className="modal-section-surface modal-upload-zone" style={{
                             display: 'block', marginTop: '1.25rem', padding: '1.25rem', textAlign: 'center',
                             border: '2px dashed #98D8C8', borderRadius: '14px', background: '#F3FBF8',
                             color: '#438D7D', fontWeight: 'bold', cursor: busy ? 'not-allowed' : 'pointer'
                         }}>
-                            {images.length ? '📷 다른 사진 선택' : '📷 사진 찍기 또는 앨범에서 선택'}
+                            <AppIcon name="camera" size={20} />
+                            <span>{images.length ? '다른 사진 선택' : '사진 찍기 또는 앨범에서 선택'}</span>
                             <input
                                 type="file"
                                 accept="image/*"
@@ -4486,7 +4650,8 @@
                                         fontSize: '1rem', cursor: busy ? 'not-allowed' : 'pointer'
                                     }}
                                 >
-                                    {analyzing ? '🔍 책등을 읽는 중...' : '🔍 사진에서 책 찾기'}
+                                    <AppIcon name="search" size={17} />
+                                    <span>{analyzing ? '책등을 읽는 중...' : '사진에서 책 찾기'}</span>
                                 </button>
                             </>
                         )}
@@ -4596,7 +4761,8 @@
                                                                 color: '#8B7EC8', fontWeight: 'bold', cursor: 'pointer'
                                                             }}
                                                         >
-                                                            🔍 {item.searchOpen ? '직접 검색 닫기' : '후보에 없어요 · 직접 검색'}
+                                                            <AppIcon name="search" size={15} />
+                                                            <span>{item.searchOpen ? '직접 검색 닫기' : '후보에 없어요 · 직접 검색'}</span>
                                                         </button>
                                                         {item.searchOpen && (
                                                             <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.65rem' }}>
@@ -4627,7 +4793,7 @@
                                     })}
                                 </div>
 
-                                <div style={{ marginTop: '1rem', padding: '1rem', background: '#F8F9FA', borderRadius: '12px' }}>
+                                <div className="modal-section-surface" style={{ marginTop: '1rem', padding: '1rem', background: '#F8F9FA', borderRadius: '12px' }}>
                                     <h4 style={{ marginBottom: '0.75rem' }}>선택한 책에 적용할 읽기 기록</h4>
                                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '0.75rem' }}>
                                         <label style={{ fontSize: '0.88rem', color: '#555' }}>
@@ -5311,7 +5477,7 @@
             };
 
             return (
-                <div onClick={onClose} style={{
+                <div className="clay-modal-overlay" onClick={onClose} style={{
                     position: 'fixed',
                     top: 0,
                     left: 0,
@@ -5324,7 +5490,7 @@
                     zIndex: 1000,
                     padding: '1rem'
                 }}>
-                    <div onClick={(e) => e.stopPropagation()} style={{
+                    <div className="clay-modal-panel clay-modal-panel-detail" onClick={(e) => e.stopPropagation()} style={{
                         background: 'white',
                         borderRadius: '20px',
                         padding: '2rem',
@@ -5335,7 +5501,7 @@
                     }}>
                         {/* 표지 이미지 */}
                         {book.fields['표지이미지'] && (
-                            <div style={{
+                            <div className="modal-book-cover" style={{
                                 width: '200px',
                                 height: '280px',
                                 margin: '0 auto 1.5rem',
@@ -5362,7 +5528,7 @@
                             <h2 style={{ fontSize: '1.8rem', color: '#FF69B4', margin: 0, flex: 1 }}>
                                 {book.fields['제목']}
                             </h2>
-                            <button
+                            <button className="modal-choice-button"
                                 onClick={(e) => {
                                     e.stopPropagation();
                                     handleToggleInterested();
@@ -5381,12 +5547,12 @@
                                 onMouseLeave={(e) => e.target.style.transform = 'scale(1)'}
                                 title={isInInterested ? '관심책에서 제거' : '관심책에 추가'}
                             >
-                                {isInInterested ? '❤️' : '🤍'}
+                                <AppIcon name="heart" size={22} />
                             </button>
                         </div>
                         
                         {/* 서지 정보 - 2열 구성 */}
-                        <div style={{ 
+                        <div className="modal-section-surface" style={{
                             background: '#F8F9FA', 
                             padding: '1rem', 
                             borderRadius: '10px', 
@@ -5401,7 +5567,7 @@
                             }}>
                                 <div>
                                     <p style={{ marginBottom: '0.5rem' }}>
-                                        ✍️ <strong>저자:</strong> {book.fields['저자']}
+                                        <strong>저자:</strong> {book.fields['저자']}
                                     </p>
                                     
                                     {book.fields['출판사'] && (
@@ -5426,7 +5592,7 @@
                                     
                                     {book.fields['ISBN'] && (
                                         <p style={{ marginBottom: '0' }}>
-                                            📚 <strong>ISBN:</strong> {book.fields['ISBN']}
+                                            <strong>ISBN:</strong> {book.fields['ISBN']}
                                         </p>
                                     )}
                                 </div>
@@ -5453,7 +5619,7 @@
                                 >
                                     {libraryLoading
                                         ? '도서관 조회 중...'
-                                        : (isLibraryOpen ? '🏛️ 도서관 조회 결과 닫기' : '🏛️ 부천시 도서관 보유 여부 조회')}
+                                        : (isLibraryOpen ? '도서관 조회 결과 닫기' : '부천시 도서관 보유 여부 조회')}
                                 </button>
 
                                 {libraryError && (
@@ -5463,7 +5629,7 @@
                                 )}
 
                                 {isLibraryOpen && (
-                                    <div style={{
+                                    <div className="modal-section-surface" style={{
                                         marginTop: '0.75rem',
                                         background: '#F8F9FA',
                                         borderRadius: '10px',
@@ -5500,7 +5666,7 @@
 
                         {book.fields['테마'] && (
                             <div style={{ marginBottom: '1rem' }}>
-                                <strong>🏷️ 테마:</strong>
+                                <strong>테마:</strong>
                                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', marginTop: '0.5rem' }}>
                                     {book.fields['테마'].split(',').map((tema, idx) => (
                                         <span key={idx} style={{
@@ -5518,7 +5684,7 @@
                         )}
 
                         {book.fields['설명'] && (
-                            <div style={{
+                            <div className="modal-section-surface" style={{
                                 marginBottom: '1.5rem',
                                 padding: '1rem',
                                 background: '#F8F9FA',
@@ -5527,8 +5693,9 @@
                                 fontSize: '0.9rem',
                                 color: '#333'
                             }}>
-                                <strong style={{ display: 'block', marginBottom: '0.5rem', color: '#FF69B4' }}>
-                                    📖 책 소개
+                                <strong className="recommendation-label" style={{ display: 'flex', marginBottom: '0.5rem', color: '#FF69B4' }}>
+                                    <AppIcon name="brand" size={16} />
+                                    <span>책 소개</span>
                                 </strong>
                                 <div style={{ whiteSpace: 'pre-wrap' }}>
                                     {book.fields['설명']}
@@ -5543,7 +5710,10 @@
                                 borderRadius: '10px',
                                 marginBottom: '1rem'
                             }}>
-                                <strong style={{ color: '#FF69B4' }}>📖 부모 가이드</strong>
+                                <strong className="recommendation-label" style={{ color: '#FF69B4' }}>
+                                    <AppIcon name="sparkle" size={16} />
+                                    <span>부모 가이드</span>
+                                </strong>
                                 <p style={{ marginTop: '0.5rem', lineHeight: '1.6' }}>
                                     {book.fields['부모_읽기_가이드']}
                                 </p>
@@ -5565,15 +5735,16 @@
                         )}
 
                         {/* 읽기 기록 섹션 */}
-                        <div style={{
+                        <div className="modal-section-surface" style={{
                             background: '#F8F9FA',
                             padding: '1.5rem',
                             borderRadius: '15px',
                             marginBottom: '1rem',
                             border: '2px solid #E9ECEF'
                         }}>
-                            <h3 style={{ fontSize: '1.2rem', color: '#FF69B4', marginBottom: '1rem' }}>
-                                📝 읽기 기록
+                            <h3 className="recommendation-label" style={{ fontSize: '1.2rem', color: '#FF69B4', marginBottom: '1rem' }}>
+                                <AppIcon name="check" size={18} />
+                                <span>읽기 기록</span>
                             </h3>
 
                             {/* 완독 여부 (끝까지 읽었는지) */}
@@ -5591,7 +5762,7 @@
                                         }}
                                     />
                                     <span style={{ fontSize: '1rem' }}>
-                                        {isRead ? '✅ 끝까지 읽었어요' : '⏸️ 중간에 멈췄어요'}
+                                        {isRead ? '끝까지 읽었어요' : '중간에 멈췄어요'}
                                     </span>
                                 </label>
                             </div>
@@ -5601,7 +5772,7 @@
                                 <strong style={{ display: 'block', marginBottom: '0.5rem' }}>질문이 많았나요?</strong>
                                 <div style={{ display: 'flex', gap: '0.5rem' }}>
                                     {['많음', '보통', '없음'].map(level => (
-                                        <button
+                                        <button className="modal-choice-button"
                                             key={level}
                                             onClick={() => setQuestionLevel(level)}
                                             style={{
@@ -5614,7 +5785,7 @@
                                                 fontSize: '0.9rem'
                                             }}
                                         >
-                                            {level === '많음' ? '❓ 많이' : level === '보통' ? '🤔 보통' : '😐 없음'}
+                                            {level === '많음' ? '많이' : level === '보통' ? '보통' : '없음'}
                                         </button>
                                     ))}
                                 </div>
@@ -5625,7 +5796,7 @@
                                 <strong style={{ display: 'block', marginBottom: '0.5rem' }}>집중해서 봤나요?</strong>
                                 <div style={{ display: 'flex', gap: '0.5rem' }}>
                                     {['높음', '보통', '낮음'].map(level => (
-                                        <button
+                                        <button className="modal-choice-button"
                                             key={level}
                                             onClick={() => setFocusLevel(level)}
                                             style={{
@@ -5638,7 +5809,7 @@
                                                 fontSize: '0.9rem'
                                             }}
                                         >
-                                            {level === '높음' ? '🎯 높음' : level === '보통' ? '👀 보통' : '😴 낮음'}
+                                            {level === '높음' ? '높음' : level === '보통' ? '보통' : '낮음'}
                                         </button>
                                     ))}
                                 </div>
@@ -5649,7 +5820,7 @@
                                 <strong style={{ display: 'block', marginBottom: '0.5rem' }}>아이 반응:</strong>
                                 <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
                                     {reactions.map(r => (
-                                        <button
+                                        <button className="modal-choice-button"
                                             key={r}
                                             onClick={() => setReaction(r)}
                                             style={{
@@ -5706,7 +5877,8 @@
                                     transition: 'all 0.3s'
                                 }}
                             >
-                                {saving ? '💾 저장 중...' : (justSaved ? '✅ 저장 완료!' : '💾 저장하기')}
+                                <AppIcon name="check" size={17} />
+                                <span>{saving ? '저장 중...' : (justSaved ? '저장 완료!' : '저장하기')}</span>
                             </button>
                             {justSaved && (
                                 <p style={{ 
@@ -5721,7 +5893,7 @@
                             )}
                         </div>
 
-                        <button
+                        <button className="modal-secondary-button"
                             onClick={onClose}
                             style={{
                                 width: '100%',
@@ -6115,7 +6287,7 @@
             };
 
             return (
-                <div onClick={onClose} style={{
+                <div className="clay-modal-overlay" onClick={onClose} style={{
                     position: 'fixed',
                     top: 0,
                     left: 0,
@@ -6128,7 +6300,7 @@
                     zIndex: 1000,
                     padding: '1rem'
                 }}>
-                    <div onClick={(e) => e.stopPropagation()} style={{
+                    <div className="clay-modal-panel clay-modal-panel-new" onClick={(e) => e.stopPropagation()} style={{
                         background: 'white',
                         borderRadius: '20px',
                         padding: '2rem',
@@ -6142,7 +6314,7 @@
                                 <span className="modal-title-mark"><AppIcon name="brand" size={20} /></span>
                                 <span>신간 도서</span>
                             </h2>
-                            <button
+                            <button className="modal-close-button"
                                 onClick={onClose}
                                 style={{
                                     background: 'none',
@@ -6159,7 +6331,7 @@
 
                         <div style={{ display: 'flex', gap: '1.5rem', marginBottom: '1.5rem', flexWrap: 'wrap' }}>
                             {book.cover && (
-                                <img 
+                                <img className="modal-book-cover"
                                     src={book.cover} 
                                     alt={book.title}
                                     style={{
@@ -6183,7 +6355,7 @@
                                 </p>
                                 {book.rating > 0 && (
                                     <div style={{ marginBottom: '1rem' }}>
-                                        <span style={{ 
+                                        <span className="modal-rating-badge" style={{
                                             background: '#FFE4E1', 
                                             color: '#FF69B4', 
                                             padding: '0.25rem 0.75rem', 
@@ -6191,12 +6363,13 @@
                                             fontSize: '0.85rem',
                                             fontWeight: 'bold'
                                         }}>
-                                            ⭐ {book.rating}/10
+                                            <AppIcon name="sparkle" size={14} />
+                                            <span>{book.rating}/10</span>
                                         </span>
                                     </div>
                                 )}
                                 {book.recommendationReason && (
-                                    <div style={{
+                                    <div className="modal-section-surface" style={{
                                         marginTop: '1rem',
                                         padding: '1rem',
                                         background: 'linear-gradient(135deg, #FFF5E6 0%, #FFE4E1 100%)',
@@ -6221,7 +6394,7 @@
                         </div>
 
                         {book.description && (
-                            <div style={{
+                            <div className="modal-section-surface" style={{
                                 marginBottom: '1.5rem',
                                 padding: '1rem',
                                 background: '#F8F9FA',
@@ -6230,8 +6403,9 @@
                                 fontSize: '0.9rem',
                                 color: '#333'
                             }}>
-                                <strong style={{ display: 'block', marginBottom: '0.5rem', color: '#FF69B4' }}>
-                                    📖 책 소개
+                                <strong className="recommendation-label" style={{ display: 'flex', marginBottom: '0.5rem', color: '#FF69B4' }}>
+                                    <AppIcon name="brand" size={16} />
+                                    <span>책 소개</span>
                                 </strong>
                                 <div style={{ whiteSpace: 'pre-wrap' }}>
                                     {book.description}
@@ -6256,7 +6430,8 @@
                                         cursor: adding ? 'not-allowed' : 'pointer'
                                     }}
                                 >
-                                    {adding ? '⏳ 추가 중...' : '➕ 책 추가하기'}
+                                    <AppIcon name="plus" size={17} />
+                                    <span>{adding ? '추가 중...' : '책 추가하기'}</span>
                                 </button>
                             </div>
                             <button
@@ -6274,7 +6449,8 @@
                                     cursor: addingToInterested ? 'not-allowed' : 'pointer'
                                 }}
                             >
-                                {addingToInterested ? '⏳ 추가 중...' : '💡 관심책으로 추가하기'}
+                                <AppIcon name="heart" size={17} />
+                                <span>{addingToInterested ? '추가 중...' : '관심책으로 추가하기'}</span>
                             </button>
                         </div>
                     </div>
