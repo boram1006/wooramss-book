@@ -20,6 +20,38 @@ const BUCHEON_LIBRARIES = [
   { libCode: '141652', libName: '부천시립별빛마루도서관' }
 ];
 
+async function checkLibrary(lib, isbn13) {
+  try {
+    const params = new URLSearchParams({
+      authKey: LIBRARY_API_KEY,
+      libCode: lib.libCode,
+      isbn13,
+      format: 'json'
+    });
+    const url = `http://data4library.kr/api/bookExist?${params.toString()}`;
+    const response = await fetch(url);
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+
+    const data = await response.json();
+    const result = data?.response?.result || {};
+    return {
+      libCode: lib.libCode,
+      libName: lib.libName,
+      hasBook: result.hasBook === 'Y',
+      loanAvailable: result.loanAvailable === 'Y'
+    };
+  } catch (error) {
+    console.error(`도서관 ${lib.libName} 조회 실패:`, error.message);
+    return {
+      libCode: lib.libCode,
+      libName: lib.libName,
+      hasBook: false,
+      loanAvailable: false,
+      error: true
+    };
+  }
+}
+
 module.exports = async (req, res) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
@@ -40,39 +72,10 @@ module.exports = async (req, res) => {
       return res.status(400).json({ success: false, error: '유효한 ISBN이 아닙니다' });
     }
 
-    const results = [];
-    for (const lib of BUCHEON_LIBRARIES) {
-      try {
-        const params = new URLSearchParams({
-          authKey: LIBRARY_API_KEY,
-          libCode: lib.libCode,
-          isbn13: isbn13,
-          format: 'json'
-        });
-        const url = `http://data4library.kr/api/bookExist?${params.toString()}`;
-        const response = await fetch(url);
-        const data = await response.json();
-        const result = data?.response?.result || {};
-        const hasBook = result.hasBook === 'Y';
-        const loanAvailable = result.loanAvailable === 'Y';
-
-        results.push({
-          libCode: lib.libCode,
-          libName: lib.libName,
-          hasBook,
-          loanAvailable
-        });
-      } catch (error) {
-        console.error(`도서관 ${lib.libName} 조회 실패:`, error.message);
-        results.push({
-          libCode: lib.libCode,
-          libName: lib.libName,
-          hasBook: false,
-          loanAvailable: false,
-          error: true
-        });
-      }
-    }
+    // 목록 순서는 유지하면서 모든 도서관을 동시에 조회한다.
+    const results = await Promise.all(
+      BUCHEON_LIBRARIES.map(lib => checkLibrary(lib, isbn13))
+    );
 
     res.status(200).json({
       success: true,
@@ -87,3 +90,6 @@ module.exports = async (req, res) => {
     });
   }
 };
+
+module.exports.checkLibrary = checkLibrary;
+module.exports.BUCHEON_LIBRARIES = BUCHEON_LIBRARIES;

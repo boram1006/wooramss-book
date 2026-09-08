@@ -1,6 +1,6 @@
 // Supabase 데이터 가져오기 (Airtable 대체)
 const { createClient } = require('@supabase/supabase-js');
-const { inferThemes } = require('../lib/theme-taxonomy');
+const { inferThemes, observeUnclassifiedThemes } = require('../lib/theme-taxonomy');
 
 // Supabase 클라이언트 초기화
 function getSupabaseClient() {
@@ -23,9 +23,14 @@ const TABLE_MAP = {
 // Airtable 형식의 레코드를 Supabase 형식으로 변환
 function convertAirtableToSupabase(records, tableName) {
   if (tableName === 'Books' || tableName === 'books') {
-    return records.map(record => ({
-      id: record.id,
-      fields: {
+    return records.map(record => {
+      observeUnclassifiedThemes(record.themes, {
+        source: 'supabase.books',
+        recordId: String(record.id || '')
+      });
+      return {
+        id: record.id,
+        fields: {
         'ISBN': record.isbn,
         '제목': record.title,
         '저자': record.author,
@@ -38,8 +43,9 @@ function convertAirtableToSupabase(records, tableName) {
         '부모_읽기_가이드': record.parent_guide,
         '연계놀이': record.activities,
         '관심': record.interested === true || record.interested === 'true' || record.interested === 1
-      }
-    }));
+        }
+      };
+    });
   } else if (tableName === 'ReadingLog' || tableName === 'reading_logs') {
     return records.map(record => ({
       id: record.id,
@@ -61,6 +67,10 @@ function convertAirtableToSupabase(records, tableName) {
 // Supabase 형식의 데이터를 Airtable 형식으로 변환
 function convertSupabaseToAirtable(data, tableName) {
   if (tableName === 'Books' || tableName === 'books') {
+    observeUnclassifiedThemes(data.themes, {
+      source: 'supabase.book',
+      recordId: String(data.id || '')
+    });
     return {
       id: data.id,
       fields: {

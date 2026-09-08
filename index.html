@@ -453,6 +453,21 @@
             color: white !important;
         }
 
+        button[style*='rgb(255, 105, 180)'],
+        button[style*='rgb(152, 216, 200)'],
+        button[style*='rgb(139, 126, 200)'] {
+            border-color: var(--clay-action) !important;
+            background: var(--clay-action) !important;
+            color: white !important;
+        }
+
+        button[style*='#FFB6C1'],
+        button[style*='#ffb6c1'],
+        button[style*='rgb(255, 182, 193)'] {
+            border-color: var(--clay-line) !important;
+            color: var(--clay-action) !important;
+        }
+
         button:disabled {
             border-color: var(--clay-line) !important;
             background: #e5e5e5 !important;
@@ -1287,9 +1302,22 @@
         }
 
         .clay-modal-overlay {
+            position: fixed !important;
+            inset: 0 !important;
+            width: 100vw !important;
+            max-width: none !important;
+            height: 100dvh !important;
+            margin: 0 !important;
+            z-index: 2000 !important;
             background: rgba(10, 26, 26, 0.52) !important;
             backdrop-filter: blur(8px);
             -webkit-backdrop-filter: blur(8px);
+        }
+
+        .main-content > .clay-modal-overlay {
+            width: 100vw !important;
+            max-width: none !important;
+            margin: 0 !important;
         }
 
         .clay-modal-panel {
@@ -1372,7 +1400,7 @@
             font-size: 20px !important;
         }
 
-        .modal-secondary-button {
+        .clay-modal-panel .modal-secondary-button {
             min-height: 44px;
             border: 1px solid var(--clay-line) !important;
             border-radius: var(--clay-radius-sm) !important;
@@ -1382,12 +1410,30 @@
             font-weight: 600 !important;
         }
 
+        .clay-modal-panel .modal-secondary-button.modal-accent-button {
+            border-color: rgba(49, 91, 85, 0.24) !important;
+            background: var(--clay-action-soft) !important;
+            color: var(--clay-action) !important;
+        }
+
         .modal-choice-button {
             min-height: 44px;
             border-radius: var(--clay-radius-sm) !important;
             color: var(--clay-ink) !important;
             font-weight: 600;
             box-shadow: none !important;
+        }
+
+        .clay-modal-panel .modal-choice-button.is-selected {
+            border-color: var(--clay-action) !important;
+            background: var(--clay-action-soft) !important;
+            color: var(--clay-action) !important;
+        }
+
+        .clay-modal-panel .modal-primary-button {
+            border-color: var(--clay-action) !important;
+            background: var(--clay-action) !important;
+            color: white !important;
         }
 
         .modal-section-surface {
@@ -1420,6 +1466,129 @@
             color: var(--clay-ink) !important;
         }
 
+        .settings-view {
+            max-width: 980px;
+            padding-bottom: 48px;
+        }
+
+        .settings-header {
+            position: relative;
+            margin-bottom: 24px;
+            padding: clamp(24px, 4vw, 40px);
+            overflow: hidden;
+            border-radius: var(--clay-radius-lg);
+            background: var(--clay-lavender);
+        }
+
+        .settings-header::after {
+            content: '';
+            position: absolute;
+            width: 150px;
+            height: 150px;
+            right: -38px;
+            bottom: -76px;
+            border-radius: 50%;
+            background: var(--clay-peach);
+        }
+
+        .settings-heading {
+            position: relative;
+            z-index: 1;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin: 0 0 8px !important;
+        }
+
+        .settings-heading-mark {
+            width: 42px;
+            height: 42px;
+            display: grid;
+            place-items: center;
+            border-radius: 14px;
+            background: rgba(255, 250, 240, 0.72);
+        }
+
+        .settings-header p {
+            position: relative;
+            z-index: 1;
+            margin: 0;
+            color: var(--clay-body);
+        }
+
+        .settings-form {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 16px;
+        }
+
+        .settings-field {
+            margin: 0 !important;
+            padding: 24px;
+            border: 1px solid var(--clay-line);
+            border-radius: var(--clay-radius-md);
+            background: rgba(255, 255, 255, 0.56);
+        }
+
+        .settings-field-wide {
+            grid-column: 1 / -1;
+        }
+
+        .settings-field > label {
+            color: var(--clay-ink);
+            font-size: 16px;
+            font-weight: 600 !important;
+        }
+
+        .settings-input {
+            min-height: 46px;
+            border: 1px solid var(--clay-line) !important;
+            border-radius: var(--clay-radius-sm) !important;
+            background: var(--clay-canvas) !important;
+            color: var(--clay-ink);
+            font-family: inherit;
+        }
+
+        .settings-input:focus {
+            border-color: var(--clay-action) !important;
+            box-shadow: 0 0 0 3px rgba(49, 91, 85, 0.09);
+        }
+
+        .settings-tag,
+        .settings-choice {
+            border: 1px solid var(--clay-line) !important;
+            border-radius: 999px !important;
+            background: var(--clay-canvas) !important;
+            color: var(--clay-body) !important;
+            font-weight: 500;
+        }
+
+        .settings-tag.is-selected,
+        .settings-choice.is-selected {
+            border-color: rgba(49, 91, 85, 0.32) !important;
+            background: var(--clay-action-soft) !important;
+            color: var(--clay-action) !important;
+        }
+
+        .settings-auto-tag {
+            display: inline-flex;
+            padding: 5px 12px !important;
+            border-radius: 999px !important;
+            background: var(--clay-card) !important;
+            color: var(--clay-muted) !important;
+        }
+
+        .settings-inline-action {
+            min-height: 46px;
+        }
+
+        .settings-save-button {
+            grid-column: 1 / -1;
+            width: max-content;
+            min-width: 160px;
+            margin-top: 4px !important;
+        }
+
         @media (max-width: 640px) {
             .clay-modal-overlay { align-items: flex-end !important; padding: 0 !important; }
             .clay-modal-panel {
@@ -1428,6 +1597,10 @@
                 border-radius: 24px 24px 0 0 !important;
             }
             .modal-title { font-size: 24px !important; }
+            .settings-form { grid-template-columns: 1fr; }
+            .settings-field-wide,
+            .settings-save-button { grid-column: auto; }
+            .settings-save-button { width: 100%; }
         }
 
         @media (max-width: 1024px) {
@@ -4076,7 +4249,7 @@
                                 </p>
 
                                 {!scanning ? (
-                                    <button
+                                    <button className="modal-secondary-button modal-accent-button"
                                         onClick={handleStartScan}
                                         disabled={searching || loading}
                                         style={{
@@ -4148,7 +4321,7 @@
                                                         : (isCameraReady ? '바코드를 화면 중앙에 맞춘 뒤 사진을 찍어주세요' : '카메라 준비 중...')))}
                                         </p>
                                         {capturedImage ? (
-                                            <button
+                                            <button className="modal-secondary-button modal-accent-button"
                                                 onClick={startCamera}
                                                 disabled={isDecoding}
                                                 style={{
@@ -4167,7 +4340,7 @@
                                                 <span>다시 찍기</span>
                                             </button>
                                         ) : (
-                                            <button
+                                            <button className="modal-secondary-button modal-accent-button"
                                                 onClick={handleCapturePhoto}
                                                 disabled={isDecoding || !isCameraReady}
                                                 style={{
@@ -4207,7 +4380,7 @@
                                         }}
                                         autoFocus
                                     />
-                                    <button
+                                    <button className="modal-secondary-button"
                                         onClick={handleSearch}
                                         disabled={searching || !title.trim()}
                                         style={{
@@ -4303,7 +4476,7 @@
                         )}
 
                         <div style={{ display: 'flex', gap: '1rem' }}>
-                            <button
+                            <button className="modal-primary-button"
                                 onClick={handleConfirm}
                                 disabled={loading || !selectedBook}
                                 style={{
@@ -5789,15 +5962,15 @@
                                 <strong style={{ display: 'block', marginBottom: '0.5rem' }}>질문이 많았나요?</strong>
                                 <div style={{ display: 'flex', gap: '0.5rem' }}>
                                     {['많음', '보통', '없음'].map(level => (
-                                        <button className="modal-choice-button"
+                                        <button className={`modal-choice-button ${questionLevel === level ? 'is-selected' : ''}`}
                                             key={level}
                                             onClick={() => setQuestionLevel(level)}
                                             style={{
                                                 flex: 1,
                                                 padding: '0.5rem',
-                                                border: questionLevel === level ? '3px solid #FF69B4' : '2px solid #ddd',
+                                                border: '1px solid #ddd',
                                                 borderRadius: '10px',
-                                                background: questionLevel === level ? '#FFE4E1' : 'white',
+                                                background: 'white',
                                                 cursor: 'pointer',
                                                 fontSize: '0.9rem'
                                             }}
@@ -5813,15 +5986,15 @@
                                 <strong style={{ display: 'block', marginBottom: '0.5rem' }}>집중해서 봤나요?</strong>
                                 <div style={{ display: 'flex', gap: '0.5rem' }}>
                                     {['높음', '보통', '낮음'].map(level => (
-                                        <button className="modal-choice-button"
+                                        <button className={`modal-choice-button ${focusLevel === level ? 'is-selected' : ''}`}
                                             key={level}
                                             onClick={() => setFocusLevel(level)}
                                             style={{
                                                 flex: 1,
                                                 padding: '0.5rem',
-                                                border: focusLevel === level ? '3px solid #FF69B4' : '2px solid #ddd',
+                                                border: '1px solid #ddd',
                                                 borderRadius: '10px',
-                                                background: focusLevel === level ? '#FFE4E1' : 'white',
+                                                background: 'white',
                                                 cursor: 'pointer',
                                                 fontSize: '0.9rem'
                                             }}
@@ -5837,15 +6010,15 @@
                                 <strong style={{ display: 'block', marginBottom: '0.5rem' }}>아이 반응:</strong>
                                 <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
                                     {reactions.map(r => (
-                                        <button className="modal-choice-button"
+                                        <button className={`modal-choice-button ${reaction === r ? 'is-selected' : ''}`}
                                             key={r}
                                             onClick={() => setReaction(r)}
                                             style={{
                                                 fontSize: '2rem',
                                                 padding: '0.5rem',
-                                                border: reaction === r ? '3px solid #FF69B4' : '2px solid #ddd',
+                                                border: '1px solid #ddd',
                                                 borderRadius: '10px',
-                                                background: reaction === r ? '#FFE4E1' : 'white',
+                                                background: 'white',
                                                 cursor: 'pointer',
                                                 transition: 'all 0.2s'
                                             }}
@@ -6042,17 +6215,24 @@
             };
 
             return (
-                <div>
-                    <h2 className="display-section-title" style={{ fontSize: '2rem', color: '#FF69B4', marginBottom: '2rem' }}>
-                        👶 아이 프로필 설정
-                    </h2>
+                <div className="settings-view">
+                    <div className="settings-header">
+                        <h2 className="display-section-title settings-heading">
+                            <span className="settings-heading-mark"><AppIcon name="user" size={21} /></span>
+                            <span>아이 프로필 설정</span>
+                        </h2>
+                        <p>읽기 습관과 관심사를 설정하면 우람이에게 더 잘 맞는 책을 추천할 수 있어요.</p>
+                    </div>
+
+                    <div className="settings-form">
 
                         {/* 생년월일 */}
-                        <div style={{ marginBottom: '1.5rem' }}>
-                            <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold' }}>
+                        <div className="settings-field">
+                            <label>
                                 생년월일
                             </label>
                             <input
+                                className="settings-input"
                                 type="date"
                                 value={birthDate}
                                 onChange={(e) => setBirthDate(e.target.value)}
@@ -6074,8 +6254,8 @@
                         </div>
 
                         {/* 요즘 관심사 */}
-                        <div style={{ marginBottom: '1.5rem' }}>
-                            <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold' }}>
+                        <div className="settings-field settings-field-wide">
+                            <label>
                                 요즘 관심사
                             </label>
                             <div style={{ fontSize: '0.85rem', color: '#777', marginBottom: '0.5rem' }}>
@@ -6089,7 +6269,7 @@
                                     <span style={{ fontSize: '0.85rem', color: '#999' }}>데이터가 부족해요</span>
                                 )}
                                 {!interestLoading && autoTopInterests.map((tag, idx) => (
-                                    <span key={idx} style={{
+                                    <span className="settings-auto-tag" key={idx} style={{
                                         background: '#F0F0F0',
                                         color: '#666',
                                         padding: '0.25rem 0.75rem',
@@ -6106,6 +6286,7 @@
                             </div>
                             <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.75rem' }}>
                                 <input
+                                    className="settings-input"
                                     type="text"
                                     value={manualInterest}
                                     onChange={(e) => setManualInterest(e.target.value)}
@@ -6120,7 +6301,7 @@
                                         fontSize: '0.9rem'
                                     }}
                                 />
-                                <button
+                                <button className="clay-button clay-button-primary settings-inline-action"
                                     type="button"
                                     onClick={addManualInterest}
                                     disabled={!manualInterest.trim() || directInterests.length >= 8}
@@ -6155,7 +6336,7 @@
                                             {group.themes.filter(label => !autoTopInterests.includes(label)).map(label => {
                                                 const isSelected = directInterests.includes(label);
                                                 return (
-                                                    <button
+                                                    <button className={`settings-tag ${isSelected ? 'is-selected' : ''}`}
                                                         key={label}
                                                         type="button"
                                                         onClick={() => toggleInterest(label)}
@@ -6185,21 +6366,21 @@
                         </div>
 
                         {/* 성별 */}
-                        <div style={{ marginBottom: '1.5rem' }}>
-                            <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold' }}>
+                        <div className="settings-field">
+                            <label>
                                 성별 (선택)
                             </label>
                             <div style={{ display: 'flex', gap: '0.5rem' }}>
                                 {['남아', '여아'].map(g => (
-                                    <button
+                                    <button className={`settings-choice ${gender === g ? 'is-selected' : ''}`}
                                         key={g}
                                         onClick={() => setGender(g)}
                                         style={{
                                             flex: 1,
                                             padding: '0.75rem',
-                                            border: gender === g ? '3px solid #FF69B4' : '2px solid #ddd',
+                                            border: '1px solid #ddd',
                                             borderRadius: '10px',
-                                            background: gender === g ? '#FFE4E1' : 'white',
+                                            background: 'white',
                                             cursor: 'pointer',
                                             fontSize: '0.9rem'
                                         }}
@@ -6211,11 +6392,12 @@
                         </div>
 
                         {/* 하루에 읽는 책 권수 */}
-                        <div style={{ marginBottom: '1.5rem' }}>
-                            <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold' }}>
+                        <div className="settings-field">
+                            <label>
                                 하루에 읽는 책 권수
                             </label>
                             <input
+                                className="settings-input"
                                 type="number"
                                 value={booksPerDay}
                                 onChange={(e) => setBooksPerDay(e.target.value)}
@@ -6237,26 +6419,26 @@
                         </div>
 
                         {/* 감정 예민도 */}
-                        <div style={{ marginBottom: '1.5rem' }}>
-                            <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold' }}>
+                        <div className="settings-field settings-field-wide">
+                            <label>
                                 감정 예민도
                             </label>
                             <div style={{ display: 'flex', gap: '0.5rem' }}>
                                 {['높음', '보통', '낮음'].map(level => (
-                                    <button
+                                    <button className={`settings-choice ${emotionSensitivity === level ? 'is-selected' : ''}`}
                                         key={level}
                                         onClick={() => setEmotionSensitivity(level)}
                                         style={{
                                             flex: 1,
                                             padding: '0.75rem',
-                                            border: emotionSensitivity === level ? '3px solid #FF69B4' : '2px solid #ddd',
+                                            border: '1px solid #ddd',
                                             borderRadius: '10px',
-                                            background: emotionSensitivity === level ? '#FFE4E1' : 'white',
+                                            background: 'white',
                                             cursor: 'pointer',
                                             fontSize: '0.9rem'
                                         }}
                                     >
-                                        {level === '높음' ? '😰 높음' : level === '보통' ? '😊 보통' : '😎 낮음'}
+                                        {level}
                                     </button>
                                 ))}
                             </div>
@@ -6266,12 +6448,12 @@
                         </div>
 
                     {/* 저장 버튼 */}
-                    <button
+                    <button className="clay-button clay-button-primary settings-save-button"
                         onClick={handleSave}
                         disabled={saving}
                         style={{
                             padding: '0.75rem 2rem',
-                            background: saving ? '#ccc' : '#FF69B4',
+                            background: saving ? '#ccc' : '#315B55',
                             border: 'none',
                             borderRadius: '10px',
                             color: 'white',
@@ -6281,8 +6463,10 @@
                             marginTop: '1rem'
                         }}
                     >
+                        <AppIcon name="check" size={17} />
                         {saving ? '저장 중...' : '저장하기'}
                     </button>
+                    </div>
                 </div>
             );
         }

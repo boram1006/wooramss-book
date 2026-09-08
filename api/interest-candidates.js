@@ -1,5 +1,12 @@
 const { createClient } = require('@supabase/supabase-js');
-const { THEME_GROUPS, THEME_CATALOG, canonicalizeTheme, normalizeThemes, inferThemes } = require('../lib/theme-taxonomy');
+const {
+  THEME_GROUPS,
+  THEME_CATALOG,
+  canonicalizeTheme,
+  normalizeThemes,
+  inferThemes,
+  observeUnclassifiedThemes
+} = require('../lib/theme-taxonomy');
 
 function getSupabaseClient() {
   const url = process.env.SUPABASE_URL;
@@ -76,13 +83,20 @@ module.exports = async (req, res) => {
     ]);
     const autoTop = calculateAutomaticInterests(books, logs);
     const autoSet = new Set(autoTop);
+    const normalizedInput = req.query.q ? canonicalizeTheme(req.query.q) : null;
+    const normalizedSelected = normalizeThemes(req.query.selected, 8);
+
+    if (req.query.q && !normalizedInput) {
+      observeUnclassifiedThemes(req.query.q, { source: 'profile.manual-interest' });
+    }
+    observeUnclassifiedThemes(req.query.selected, { source: 'profile.selected-interests' });
 
     return res.status(200).json({
       success: true,
       hasData: logs.length > 0,
       autoTop,
-      normalizedInput: req.query.q ? canonicalizeTheme(req.query.q) : null,
-      normalizedSelected: normalizeThemes(req.query.selected, 8),
+      normalizedInput,
+      normalizedSelected,
       catalogVersion: 1,
       groups: THEME_GROUPS,
       candidates: THEME_CATALOG.map(label => ({
