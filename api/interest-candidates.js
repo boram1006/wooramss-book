@@ -4,9 +4,12 @@ const {
   THEME_CATALOG,
   canonicalizeTheme,
   normalizeThemes,
-  inferThemes,
-  observeUnclassifiedThemes
+  inferThemes
 } = require('../lib/theme-taxonomy');
+const {
+  loadThemeOverrides,
+  recordUnclassifiedObservations
+} = require('../lib/theme-classification-store');
 
 function getSupabaseClient() {
   const url = process.env.SUPABASE_URL;
@@ -35,7 +38,7 @@ function reactionWeight(reaction) {
   return 0.8;
 }
 
-function calculateAutomaticInterests(books, logs) {
+function calculateAutomaticInterests(books, logs, overrides) {
   const booksById = new Map(books.map(book => [String(book.id), book]));
   const scores = new Map();
   const counts = new Map();
@@ -44,7 +47,7 @@ function calculateAutomaticInterests(books, logs) {
   for (const log of logs) {
     const book = booksById.get(String(log.book_id));
     if (!book) continue;
-    const themes = inferThemes(book, 3);
+    const themes = inferThemes(book, 3, overrides);
     if (!themes.length) continue;
 
     const dateMs = log.read_date ? new Date(log.read_date).getTime() : now;
@@ -77,19 +80,25 @@ module.exports = async (req, res) => {
 
   try {
     const supabase = getSupabaseClient();
-    const [books, logs] = await Promise.all([
+    const [books, logs, overrides] = await Promise.all([
       fetchAll(supabase, 'books'),
-      fetchAll(supabase, 'reading_logs')
+      fetchAll(supabase, 'reading_logs'),
+      loadThemeOverrides(supabase)
     ]);
-    const autoTop = calculateAutomaticInterests(books, logs);
+    const autoTop = calculateAutomaticInterests(books, logs, overrides);
     const autoSet = new Set(autoTop);
-    const normalizedInput = req.query.q ? canonicalizeTheme(req.query.q) : null;
-    const normalizedSelected = normalizeThemes(req.query.selected, 8);
+    const normalizedInput = req.query.q ? canonicalizeTheme(req.query.q, overrides) : null;
+    const normalizedSelected = normalizeThemes(req.query.selected, 8, overrides);
 
-    if (req.query.q && !normalizedInput) {
-      observeUnclassifiedThemes(req.query.q, { source: 'profile.manual-interest' });
-    }
-    observeUnclassifiedThemes(req.query.selected, { source: 'profile.selected-interests' });
+    await recordUnclassifiedObservations(supabase, [
+      ...books.map(book => ({
+        value: book.themes,
+        source: 'supabase.books',
+        recordId: book.id
+      })),
+      { value: req.query.q, source: 'profile.manual-interest' },
+      { value: req.query.selected, source: 'profile.selected-interests' }
+    ], overrides);
 
     return res.status(200).json({
       success: true,

@@ -56,3 +56,15 @@ test('미분류 표현 로그는 발생 경로를 포함하고 같은 런타임�
   assert.match(messages[0], /"source":"test.books"/);
   resetObservedUnclassifiedThemes();
 });
+
+test('관리 화면에서 만든 연결과 제외 규칙을 정규화에 적용한다', () => {
+  const overrides = new Map([
+    ['로봇과기계', '과학·탐구'],
+    ['보드북', null]
+  ]);
+
+  assert.equal(canonicalizeTheme('로봇과 기계', overrides), '과학·탐구');
+  assert.equal(canonicalizeTheme('보드북', overrides), null);
+  assert.deepEqual(normalizeThemes(['로봇과 기계', '보드북'], 8, overrides), ['과학·탐구']);
+  assert.deepEqual(listUnclassifiedThemes(['로봇과 기계', '보드북'], overrides), []);
+});

@@ -1592,6 +1592,117 @@
             margin-top: 4px !important;
         }
 
+        .classification-manager {
+            grid-column: 1 / -1;
+        }
+
+        .classification-heading-row {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 16px;
+            margin-bottom: 8px;
+        }
+
+        .classification-heading-row h3 {
+            margin: 0;
+            font-family: var(--clay-section-font);
+            font-size: 22px;
+            font-weight: 600;
+        }
+
+        .classification-count {
+            flex: 0 0 auto;
+            padding: 5px 10px;
+            border-radius: 999px;
+            background: var(--clay-action-soft);
+            color: var(--clay-action);
+            font-size: 12px;
+            font-weight: 700;
+        }
+
+        .classification-description,
+        .classification-empty,
+        .classification-error {
+            color: var(--clay-muted);
+            font-size: 13px;
+            line-height: 1.6;
+        }
+
+        .classification-error { color: #a74747; }
+
+        .classification-list {
+            display: grid;
+            gap: 10px;
+            margin-top: 18px;
+        }
+
+        .classification-item {
+            display: grid;
+            grid-template-columns: minmax(180px, 1fr) minmax(260px, 1.35fr);
+            gap: 18px;
+            padding: 18px;
+            border: 1px solid var(--clay-line);
+            border-radius: var(--clay-radius-md);
+            background: var(--clay-canvas);
+        }
+
+        .classification-expression {
+            margin-bottom: 6px;
+            color: var(--clay-ink);
+            font-size: 16px;
+            font-weight: 700;
+        }
+
+        .classification-meta {
+            color: var(--clay-muted);
+            font-size: 12px;
+            line-height: 1.65;
+            word-break: break-word;
+        }
+
+        .classification-status {
+            display: inline-flex;
+            margin-left: 6px;
+            padding: 2px 7px;
+            border-radius: 999px;
+            background: var(--clay-card);
+            color: var(--clay-muted);
+            font-size: 11px;
+        }
+
+        .classification-controls {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) auto;
+            gap: 8px;
+            align-content: start;
+        }
+
+        .classification-controls select {
+            min-height: 42px;
+            padding: 0 12px;
+            border: 1px solid var(--clay-line);
+            border-radius: var(--clay-radius-sm);
+            background: white;
+            color: var(--clay-ink);
+        }
+
+        .classification-secondary-actions {
+            grid-column: 1 / -1;
+            display: flex;
+            justify-content: flex-end;
+            gap: 8px;
+        }
+
+        .classification-controls button {
+            min-height: 42px;
+            padding: 0 14px;
+        }
+
+        .classification-exclude-button {
+            color: #8d4a4a;
+        }
+
         @media (max-width: 640px) {
             .clay-modal-overlay { align-items: flex-end !important; padding: 0 !important; }
             .clay-modal-panel {
@@ -1602,8 +1713,13 @@
             .modal-title { font-size: 24px !important; }
             .settings-form { grid-template-columns: 1fr; }
             .settings-field-wide,
-            .settings-save-button { grid-column: auto; }
+            .settings-save-button,
+            .classification-manager { grid-column: auto; }
             .settings-save-button { width: 100%; }
+            .classification-item { grid-template-columns: 1fr; }
+            .classification-controls { grid-template-columns: 1fr; }
+            .classification-secondary-actions { grid-column: auto; justify-content: stretch; }
+            .classification-secondary-actions button { flex: 1; }
         }
 
         @media (max-width: 1024px) {
@@ -6120,8 +6236,17 @@
             const [interestGroups, setInterestGroups] = useState([]);
             const [manualInterest, setManualInterest] = useState('');
             const [interestError, setInterestError] = useState('');
+            const [classificationItems, setClassificationItems] = useState([]);
+            const [classificationGroups, setClassificationGroups] = useState([]);
+            const [classificationSelections, setClassificationSelections] = useState({});
+            const [classificationLoading, setClassificationLoading] = useState(true);
+            const [classificationBusy, setClassificationBusy] = useState('');
+            const [classificationError, setClassificationError] = useState('');
             const directInterests = selectedInterests.filter(
                 item => !autoTopInterests.some(auto => auto.toLowerCase() === String(item).toLowerCase())
+            );
+            const openClassifications = classificationItems.filter(
+                item => item.status === 'pending' || item.status === 'deferred'
             );
 
             useEffect(() => {
@@ -6156,6 +6281,70 @@
                 loadCandidates();
                 return () => { cancelled = true; };
             }, []);
+
+            const loadClassifications = async () => {
+                setClassificationLoading(true);
+                setClassificationError('');
+                try {
+                    const response = await fetch('/api/theme-classifications', { cache: 'no-store' });
+                    const contentType = response.headers.get('content-type') || '';
+                    if (!contentType.includes('application/json')) throw new Error('분류 관리 기능을 준비하는 중입니다.');
+                    const data = await response.json();
+                    if (!response.ok) throw new Error(data.error || '미분류 표현을 불러오지 못했어요.');
+                    setClassificationItems(data.items || []);
+                    setClassificationGroups(data.groups || []);
+                    setClassificationSelections(current => {
+                        const next = { ...current };
+                        (data.items || []).forEach(item => {
+                            if (!next[item.normalized_expression] && item.mapped_theme) {
+                                next[item.normalized_expression] = item.mapped_theme;
+                            }
+                        });
+                        return next;
+                    });
+                } catch (error) {
+                    setClassificationError(error.message || '미분류 표현을 불러오지 못했어요.');
+                } finally {
+                    setClassificationLoading(false);
+                }
+            };
+
+            useEffect(() => {
+                loadClassifications();
+            }, []);
+
+            const handleClassification = async (item, action) => {
+                const mappedTheme = classificationSelections[item.normalized_expression] || '';
+                if (action === 'mapped' && !mappedTheme) {
+                    setClassificationError('연결할 표준 테마를 먼저 선택해주세요.');
+                    return;
+                }
+
+                setClassificationBusy(item.normalized_expression);
+                setClassificationError('');
+                try {
+                    const response = await fetch('/api/theme-classifications', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            normalizedExpression: item.normalized_expression,
+                            action,
+                            mappedTheme
+                        })
+                    });
+                    const contentType = response.headers.get('content-type') || '';
+                    if (!contentType.includes('application/json')) throw new Error('분류 관리 기능을 준비하는 중입니다.');
+                    const data = await response.json();
+                    if (!response.ok) throw new Error(data.error || '분류 결과를 저장하지 못했어요.');
+                    setClassificationItems(current => current.map(row => (
+                        row.normalized_expression === item.normalized_expression ? data.item : row
+                    )));
+                } catch (error) {
+                    setClassificationError(error.message || '분류 결과를 저장하지 못했어요.');
+                } finally {
+                    setClassificationBusy('');
+                }
+            };
 
             const toggleInterest = (label) => {
                 const normalized = String(label || '').trim();
@@ -6366,6 +6555,93 @@
                                     직접 반영: {directInterests.join(', ')}
                                 </div>
                             )}
+                        </div>
+
+                        <div className="settings-field classification-manager">
+                            <div className="classification-heading-row">
+                                <div>
+                                    <h3>표현 분류 관리</h3>
+                                    <p className="classification-description">
+                                        사전에 없는 표현을 기존 테마에 연결하거나 추천 분류에서 제외할 수 있어요.
+                                    </p>
+                                </div>
+                                <span className="classification-count">미분류 {openClassifications.length}개</span>
+                            </div>
+
+                            {classificationLoading && (
+                                <p className="classification-empty">미분류 표현을 불러오는 중...</p>
+                            )}
+                            {!classificationLoading && classificationError && (
+                                <p className="classification-error">{classificationError}</p>
+                            )}
+                            {!classificationLoading && !classificationError && openClassifications.length === 0 && (
+                                <p className="classification-empty">지금 검토할 표현이 없어요.</p>
+                            )}
+
+                            <div className="classification-list">
+                                {openClassifications.map(item => {
+                                    const busy = classificationBusy === item.normalized_expression;
+                                    return (
+                                        <div className="classification-item" key={item.normalized_expression}>
+                                            <div>
+                                                <div className="classification-expression">
+                                                    {item.raw_expression}
+                                                    {item.status === 'deferred' && <span className="classification-status">보류됨</span>}
+                                                </div>
+                                                <div className="classification-meta">
+                                                    {item.occurrence_count || 1}회 발견 · 최근 {new Date(item.last_seen_at).toLocaleDateString('ko-KR')}
+                                                    {(item.sources || []).length > 0 && <><br />출처: {(item.sources || []).join(', ')}</>}
+                                                    {(item.record_ids || []).length > 0 && <><br />관련 책 ID: {(item.record_ids || []).slice(0, 3).join(', ')}</>}
+                                                </div>
+                                            </div>
+                                            <div className="classification-controls">
+                                                <select
+                                                    value={classificationSelections[item.normalized_expression] || ''}
+                                                    onChange={(event) => setClassificationSelections(current => ({
+                                                        ...current,
+                                                        [item.normalized_expression]: event.target.value
+                                                    }))}
+                                                    disabled={busy}
+                                                    aria-label={`${item.raw_expression} 연결 테마`}
+                                                >
+                                                    <option value="">연결할 표준 테마</option>
+                                                    {classificationGroups.map(group => (
+                                                        <optgroup label={group.label} key={group.id}>
+                                                            {group.themes.map(theme => <option value={theme} key={theme}>{theme}</option>)}
+                                                        </optgroup>
+                                                    ))}
+                                                </select>
+                                                <button
+                                                    className="clay-button clay-button-primary"
+                                                    type="button"
+                                                    disabled={busy || !classificationSelections[item.normalized_expression]}
+                                                    onClick={() => handleClassification(item, 'mapped')}
+                                                >
+                                                    연결
+                                                </button>
+                                                <div className="classification-secondary-actions">
+                                                    <button
+                                                        className="clay-button"
+                                                        type="button"
+                                                        disabled={busy}
+                                                        onClick={() => handleClassification(item, item.status === 'deferred' ? 'pending' : 'deferred')}
+                                                    >
+                                                        {item.status === 'deferred' ? '다시 검토' : '보류'}
+                                                    </button>
+                                                    <button
+                                                        className="clay-button classification-exclude-button"
+                                                        type="button"
+                                                        disabled={busy}
+                                                        onClick={() => handleClassification(item, 'excluded')}
+                                                    >
+                                                        제외
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                            </div>
                         </div>
 
                         {/* 성별 */}

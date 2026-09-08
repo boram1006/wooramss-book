@@ -4,6 +4,10 @@
 const { createClient } = require('@supabase/supabase-js');
 const { normalizeThemes, inferThemes } = require('../lib/theme-taxonomy');
 const {
+  loadThemeOverrides,
+  recordUnclassifiedObservations
+} = require('../lib/theme-classification-store');
+const {
   buildReadingSignal,
   cleanOwnedFallbackDescription,
   hasStrongPersonalEvidence,
@@ -37,10 +41,10 @@ function getSupabaseClient() {
   return createClient(supabaseUrl, supabaseKey);
 }
 
-function parseExplicitInterests(raw) {
+function parseExplicitInterests(raw, overrides) {
   if (!raw) return [];
   if (Array.isArray(raw)) raw = raw.join(',');
-  return normalizeThemes(raw, 8).map(theme => theme.toLowerCase());
+  return normalizeThemes(raw, 8, overrides).map(theme => theme.toLowerCase());
 }
 
 function clamp(n, min, max) {
@@ -952,6 +956,7 @@ module.exports = async (req, res) => {
 
   try {
     const supabase = getSupabaseClient();
+    const themeOverridesPromise = loadThemeOverrides(supabase);
 
     // 1. 아이 프로필 (쿼리 파라미터)
     const baseProfile = {
@@ -987,6 +992,17 @@ module.exports = async (req, res) => {
     }
 
     const booksData = allBooksData;
+    const themeOverrides = await themeOverridesPromise;
+
+    await recordUnclassifiedObservations(
+      supabase,
+      booksData.map(book => ({
+        value: book.themes,
+        source: 'recommendations.books',
+        recordId: book.id
+      })),
+      themeOverrides
+    );
 
     // Airtable 형식으로 변환 (하위 호환성)
     const allBooks = (booksData || []).map(book => ({
@@ -999,7 +1015,7 @@ module.exports = async (req, res) => {
         '발행년': book.pub_year,
         '표지이미지': book.cover_image,
         '설명': book.description,
-        '테마': inferThemes(book, 3).join(','),
+        '테마': inferThemes(book, 3, themeOverrides).join(','),
         '연령': book.age_range,
         '부모_읽기_가이드': book.parent_guide,
         '연계놀이': book.activities,
@@ -1061,7 +1077,7 @@ module.exports = async (req, res) => {
       booksPerDay: resolvedBooksPerDay,
     };
 
-    const explicitInterestsNormalized = parseExplicitInterests(req.query.interests);
+    const explicitInterestsNormalized = parseExplicitInterests(req.query.interests, themeOverrides);
 
     // 4. 읽지 않은 책 필터링 + 안볼래요 제외
     const skipIds = new Set(

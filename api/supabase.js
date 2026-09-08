@@ -1,6 +1,10 @@
 // Supabase 데이터 가져오기 (Airtable 대체)
 const { createClient } = require('@supabase/supabase-js');
-const { inferThemes, observeUnclassifiedThemes } = require('../lib/theme-taxonomy');
+const { inferThemes } = require('../lib/theme-taxonomy');
+const {
+  loadThemeOverrides,
+  recordUnclassifiedObservations
+} = require('../lib/theme-classification-store');
 
 // Supabase 클라이언트 초기화
 function getSupabaseClient() {
@@ -21,13 +25,9 @@ const TABLE_MAP = {
 };
 
 // Airtable 형식의 레코드를 Supabase 형식으로 변환
-function convertAirtableToSupabase(records, tableName) {
+function convertAirtableToSupabase(records, tableName, overrides) {
   if (tableName === 'Books' || tableName === 'books') {
     return records.map(record => {
-      observeUnclassifiedThemes(record.themes, {
-        source: 'supabase.books',
-        recordId: String(record.id || '')
-      });
       return {
         id: record.id,
         fields: {
@@ -38,7 +38,7 @@ function convertAirtableToSupabase(records, tableName) {
         '발행년': record.pub_year,
         '표지이미지': record.cover_image,
         '설명': record.description,
-        '테마': inferThemes(record, 3).join(','),
+        '테마': inferThemes(record, 3, overrides).join(','),
         '연령': record.age_range,
         '부모_읽기_가이드': record.parent_guide,
         '연계놀이': record.activities,
@@ -65,12 +65,8 @@ function convertAirtableToSupabase(records, tableName) {
 }
 
 // Supabase 형식의 데이터를 Airtable 형식으로 변환
-function convertSupabaseToAirtable(data, tableName) {
+function convertSupabaseToAirtable(data, tableName, overrides) {
   if (tableName === 'Books' || tableName === 'books') {
-    observeUnclassifiedThemes(data.themes, {
-      source: 'supabase.book',
-      recordId: String(data.id || '')
-    });
     return {
       id: data.id,
       fields: {
@@ -81,7 +77,7 @@ function convertSupabaseToAirtable(data, tableName) {
         '발행년': data.pub_year,
         '표지이미지': data.cover_image,
         '설명': data.description,
-        '테마': inferThemes(data, 3).join(','),
+        '테마': inferThemes(data, 3, overrides).join(','),
         '연령': data.age_range,
         '부모_읽기_가이드': data.parent_guide,
         '연계놀이': data.activities,
@@ -210,8 +206,22 @@ module.exports = async (req, res) => {
     const data = allData;
     console.log(`Fetched ${data.length} records from ${supabaseTableName}`);
 
+    let overrides = new Map();
+    if (supabaseTableName === 'books') {
+      overrides = await loadThemeOverrides(supabase);
+      await recordUnclassifiedObservations(
+        supabase,
+        data.map(book => ({
+          value: book.themes,
+          source: 'supabase.books',
+          recordId: book.id
+        })),
+        overrides
+      );
+    }
+
     // Airtable 형식으로 변환하여 반환 (하위 호환성)
-    const convertedData = convertAirtableToSupabase(data || [], table);
+    const convertedData = convertAirtableToSupabase(data || [], table, overrides);
 
     res.status(200).json(convertedData);
   } catch (error) {
