@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>우람쓰 북가이드</title>
     <link href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+KR:wght@500;600&display=swap" rel="stylesheet">
     <style>
         * {
             margin: 0;
@@ -386,6 +387,7 @@
             --clay-radius-md: 16px;
             --clay-radius-lg: 24px;
             --clay-sidebar: 244px;
+            --clay-section-font: Georgia, 'Noto Serif KR', serif;
         }
 
         html {
@@ -778,10 +780,11 @@
 
         .section-title {
             color: var(--clay-ink);
+            font-family: var(--clay-section-font);
             font-size: clamp(28px, 3vw, 40px);
-            font-weight: 500;
-            line-height: 1.1;
-            letter-spacing: -0.04em;
+            font-weight: 600;
+            line-height: 1.2;
+            letter-spacing: -0.035em;
         }
 
         .section-subtitle {
@@ -898,10 +901,19 @@
             position: relative;
             z-index: 1;
             margin: 0 0 8px;
+            font-family: var(--clay-section-font);
             font-size: clamp(40px, 5vw, 64px);
-            font-weight: 500;
-            line-height: 1;
-            letter-spacing: -0.055em;
+            font-weight: 600;
+            line-height: 1.12;
+            letter-spacing: -0.045em;
+        }
+
+        .display-section-title {
+            font-family: var(--clay-section-font) !important;
+            font-weight: 600 !important;
+            line-height: 1.2 !important;
+            letter-spacing: -0.035em !important;
+            color: var(--clay-ink) !important;
         }
 
         .view-heading p {
@@ -1259,9 +1271,10 @@
             display: flex;
             align-items: center;
             gap: 12px;
+            font-family: var(--clay-section-font);
             color: var(--clay-ink) !important;
-            font-weight: 500 !important;
-            letter-spacing: -0.04em;
+            font-weight: 600 !important;
+            letter-spacing: -0.035em;
         }
 
         .modal-title-mark {
@@ -4336,7 +4349,7 @@
                     padding: '1.5rem'
                 }}>
                     <div style={{ marginBottom: '1rem' }}>
-                        <h2 style={{ fontSize: '1.5rem', color: '#333', marginBottom: '0.25rem' }}>
+                        <h2 className="display-section-title" style={{ fontSize: '1.5rem', color: '#333', marginBottom: '0.25rem' }}>
                             {title}
                         </h2>
                         {subtitle && (
@@ -4920,7 +4933,7 @@
             return (
                 <div>
 
-                    <h2 style={{ fontSize: '2rem', color: '#FF69B4', marginBottom: '1rem' }}>
+                    <h2 className="display-section-title" style={{ fontSize: '2rem', color: '#FF69B4', marginBottom: '1rem' }}>
                         📚 전집 둘러보기
                     </h2>
 
@@ -4973,7 +4986,7 @@
             return (
                 <div>
 
-                    <h2 style={{ fontSize: '2rem', color: '#FF69B4', marginBottom: '1rem' }}>
+                    <h2 className="display-section-title" style={{ fontSize: '2rem', color: '#FF69B4', marginBottom: '1rem' }}>
                         🔍 #{theme} ({books.length}권)
                     </h2>
 
@@ -6026,7 +6039,7 @@
 
             return (
                 <div>
-                    <h2 style={{ fontSize: '2rem', color: '#FF69B4', marginBottom: '2rem' }}>
+                    <h2 className="display-section-title" style={{ fontSize: '2rem', color: '#FF69B4', marginBottom: '2rem' }}>
                         👶 아이 프로필 설정
                     </h2>
 
