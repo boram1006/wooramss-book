@@ -2,16 +2,18 @@
   "name": "wooram-book",
   "version": "1.0.0",
   "type": "commonjs",
+  "engines": {
+    "node": ">=22"
+  },
   "scripts": {
+    "build": "node scripts/build-client.cjs",
     "test": "node --test --test-isolation=none"
   },
   "dependencies": {
-    "@supabase/supabase-js": "^2.39.0",
+    "@supabase/supabase-js": "^2.116.0",
     "dotenv": "^16.3.1"
+  },
+  "devDependencies": {
+    "@babel/standalone": "^8.0.4"
   }
 }
-
-
-
-
-

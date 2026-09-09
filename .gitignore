@@ -1,5 +1,8 @@
 # Dependencies
 node_modules/
+.npm-cache/
+app.js
+public/
 /.pnp
 .pnp.js
 

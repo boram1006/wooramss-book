@@ -4,6 +4,7 @@ const { inferThemes } = require('../lib/theme-taxonomy');
 const {
   loadThemeOverrides
 } = require('../lib/theme-classification-store');
+const { fetchAllRows } = require('../lib/supabase-pagination');
 
 // Supabase 클라이언트 초기화
 function getSupabaseClient() {
@@ -176,33 +177,7 @@ module.exports = async (req, res) => {
 
     console.log(`Fetching from table: ${supabaseTableName}`);
 
-    // 모든 레코드 가져오기 (Supabase는 기본적으로 1000개로 제한하므로 페이지네이션 필요)
-    let allData = [];
-    let from = 0;
-    const pageSize = 1000;
-    let hasMore = true;
-
-    while (hasMore) {
-      const { data: pageData, error } = await supabase
-        .from(supabaseTableName)
-        .select('*')
-        .range(from, from + pageSize - 1);
-
-      if (error) {
-        console.error('Supabase query error:', error);
-        throw new Error(`Supabase error: ${error.message} (code: ${error.code})`);
-      }
-
-      if (pageData && pageData.length > 0) {
-        allData = allData.concat(pageData);
-        from += pageSize;
-        hasMore = pageData.length === pageSize;
-      } else {
-        hasMore = false;
-      }
-    }
-
-    const data = allData;
+    const data = await fetchAllRows(supabase, supabaseTableName);
     console.log(`Fetched ${data.length} records from ${supabaseTableName}`);
 
     let overrides = new Map();
