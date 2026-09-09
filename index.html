@@ -1703,6 +1703,27 @@
             color: #8d4a4a;
         }
 
+        .classification-pagination {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            margin-top: 16px;
+            color: var(--clay-muted);
+            font-size: 12px;
+        }
+
+        .classification-pagination-actions {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .classification-pagination button {
+            min-height: 38px;
+            padding: 0 13px;
+        }
+
         @media (max-width: 640px) {
             .clay-modal-overlay { align-items: flex-end !important; padding: 0 !important; }
             .clay-modal-panel {
@@ -1720,6 +1741,7 @@
             .classification-controls { grid-template-columns: 1fr; }
             .classification-secondary-actions { grid-column: auto; justify-content: stretch; }
             .classification-secondary-actions button { flex: 1; }
+            .classification-pagination { align-items: flex-start; flex-direction: column; }
         }
 
         @media (max-width: 1024px) {
@@ -6242,6 +6264,9 @@
             const [classificationLoading, setClassificationLoading] = useState(true);
             const [classificationBusy, setClassificationBusy] = useState('');
             const [classificationError, setClassificationError] = useState('');
+            const [classificationTotal, setClassificationTotal] = useState(0);
+            const [classificationPage, setClassificationPage] = useState(1);
+            const classificationPageSize = 20;
             const directInterests = selectedInterests.filter(
                 item => !autoTopInterests.some(auto => auto.toLowerCase() === String(item).toLowerCase())
             );
@@ -6282,17 +6307,21 @@
                 return () => { cancelled = true; };
             }, []);
 
-            const loadClassifications = async () => {
+            const classificationTotalPages = Math.max(1, Math.ceil(classificationTotal / classificationPageSize));
+
+            const loadClassifications = async (requestedPage = 1) => {
                 setClassificationLoading(true);
                 setClassificationError('');
                 try {
-                    const response = await fetch('/api/interest-candidates?mode=classifications', { cache: 'no-store' });
+                    const response = await fetch(`/api/interest-candidates?mode=classifications&page=${requestedPage}&pageSize=${classificationPageSize}`, { cache: 'no-store' });
                     const contentType = response.headers.get('content-type') || '';
                     if (!contentType.includes('application/json')) throw new Error('분류 관리 기능을 준비하는 중입니다.');
                     const data = await response.json();
                     if (!response.ok) throw new Error(data.error || '미분류 표현을 불러오지 못했어요.');
                     setClassificationItems(data.items || []);
                     setClassificationGroups(data.groups || []);
+                    setClassificationTotal(data.total || 0);
+                    setClassificationPage(data.page || requestedPage);
                     setClassificationSelections(current => {
                         const next = { ...current };
                         (data.items || []).forEach(item => {
@@ -6310,7 +6339,7 @@
             };
 
             useEffect(() => {
-                loadClassifications();
+                loadClassifications(1);
             }, []);
 
             const handleClassification = async (item, action) => {
@@ -6336,9 +6365,10 @@
                     if (!contentType.includes('application/json')) throw new Error('분류 관리 기능을 준비하는 중입니다.');
                     const data = await response.json();
                     if (!response.ok) throw new Error(data.error || '분류 결과를 저장하지 못했어요.');
-                    setClassificationItems(current => current.map(row => (
-                        row.normalized_expression === item.normalized_expression ? data.item : row
-                    )));
+                    const nextPage = classificationItems.length === 1 && classificationPage > 1
+                        ? classificationPage - 1
+                        : classificationPage;
+                    await loadClassifications(nextPage);
                 } catch (error) {
                     setClassificationError(error.message || '분류 결과를 저장하지 못했어요.');
                 } finally {
@@ -6565,7 +6595,7 @@
                                         사전에 없는 표현을 기존 테마에 연결하거나 추천 분류에서 제외할 수 있어요.
                                     </p>
                                 </div>
-                                <span className="classification-count">미분류 {openClassifications.length}개</span>
+                                <span className="classification-count">미분류 {classificationTotal.toLocaleString('ko-KR')}개</span>
                             </div>
 
                             {classificationLoading && (
@@ -6589,7 +6619,9 @@
                                                     {item.status === 'deferred' && <span className="classification-status">보류됨</span>}
                                                 </div>
                                                 <div className="classification-meta">
-                                                    {item.occurrence_count || 1}회 발견 · 최근 {new Date(item.last_seen_at).toLocaleDateString('ko-KR')}
+                                                    {(item.record_ids || []).length > 0
+                                                        ? `관련 책 ${(item.record_ids || []).length}권`
+                                                        : `${item.occurrence_count || 1}회 발견`} · 최근 {new Date(item.last_seen_at).toLocaleDateString('ko-KR')}
                                                     {(item.sources || []).length > 0 && <><br />출처: {(item.sources || []).join(', ')}</>}
                                                     {(item.record_ids || []).length > 0 && <><br />관련 책 ID: {(item.record_ids || []).slice(0, 3).join(', ')}</>}
                                                 </div>
@@ -6642,6 +6674,32 @@
                                     );
                                 })}
                             </div>
+                            {!classificationLoading && !classificationError && classificationTotal > classificationPageSize && (
+                                <div className="classification-pagination">
+                                    <span>
+                                        {classificationTotal.toLocaleString('ko-KR')}개 중 {(classificationPage - 1) * classificationPageSize + 1}–{Math.min(classificationPage * classificationPageSize, classificationTotal)}개
+                                    </span>
+                                    <div className="classification-pagination-actions">
+                                        <button
+                                            className="clay-button"
+                                            type="button"
+                                            disabled={classificationPage <= 1 || Boolean(classificationBusy)}
+                                            onClick={() => loadClassifications(classificationPage - 1)}
+                                        >
+                                            이전
+                                        </button>
+                                        <span>{classificationPage} / {classificationTotalPages}</span>
+                                        <button
+                                            className="clay-button"
+                                            type="button"
+                                            disabled={classificationPage >= classificationTotalPages || Boolean(classificationBusy)}
+                                            onClick={() => loadClassifications(classificationPage + 1)}
+                                        >
+                                            다음
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
                         </div>
 
                         {/* 성별 */}

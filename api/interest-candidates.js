@@ -7,7 +7,7 @@ const {
   inferThemes
 } = require('../lib/theme-taxonomy');
 const {
-  loadThemeClassifications,
+  loadOpenThemeClassifications,
   loadThemeOverrides,
   recordUnclassifiedObservations,
   validateClassification
@@ -87,10 +87,14 @@ module.exports = async (req, res) => {
     const mode = String(req.query.mode || '');
 
     if (mode === 'classifications' && req.method === 'GET') {
+      const result = await loadOpenThemeClassifications(supabase, {
+        page: req.query.page,
+        pageSize: req.query.pageSize
+      });
       return res.status(200).json({
         success: true,
         groups: THEME_GROUPS,
-        items: await loadThemeClassifications(supabase)
+        ...result
       });
     }
 

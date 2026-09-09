@@ -1,6 +1,9 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { validateClassification } = require('../lib/theme-classification-store');
+const {
+  normalizeClassificationPagination,
+  validateClassification
+} = require('../lib/theme-classification-store');
 
 test('기존 표준 테마 연결 요청을 검증한다', () => {
   assert.deepEqual(validateClassification({
@@ -19,4 +22,15 @@ test('기존 표준 테마 연결 요청을 검증한다', () => {
 test('목록에 없는 연결 대상과 잘못된 처리 방식을 거부한다', () => {
   assert.match(validateClassification({ normalizedExpression: 'x', action: 'mapped', mappedTheme: '새테마' }).error, /표준 테마/);
   assert.match(validateClassification({ normalizedExpression: 'x', action: 'delete' }).error, /지원하지 않는/);
+});
+
+test('분류 목록 페이지 값을 안전한 범위로 정규화한다', () => {
+  assert.deepEqual(normalizeClassificationPagination('2', '20'), {
+    page: 2,
+    pageSize: 20,
+    from: 20,
+    to: 39
+  });
+  assert.equal(normalizeClassificationPagination('-3', '999').page, 1);
+  assert.equal(normalizeClassificationPagination('-3', '999').pageSize, 50);
 });
