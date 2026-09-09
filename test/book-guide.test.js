@@ -5,6 +5,7 @@ const {
   assessGuideQuality,
   generateBookGuide,
   generateBookGuides,
+  rankInteractionStrategies,
   sanitizeGuide,
   selectInteractionStrategy,
   SYSTEM_PROMPT
@@ -97,6 +98,23 @@ test('명확한 책 단서로 상호작용 전략을 먼저 결정한다', () =>
   assert.equal(selectInteractionStrategy({ title: '그림책 만들기', description: '책 한 권을 완성하도록 시작부터 마무리까지 전 과정을 알려 준다.' }), '순서 다시 말하기');
   assert.equal(selectInteractionStrategy({ title: '사뿐사뿐 따삐르', description: '의성어와 의태어가 풍부한 정글 그림책이다.' }), '소리와 말놀이');
   assert.equal(selectInteractionStrategy({ title: '생쥐 모이의 도전', description: '가족과 살던 모이가 바깥세상으로 떠나 새로운 곳에 도전한다.' }), '순서 다시 말하기');
+});
+
+test('첫 번째 일치가 아니라 8개 전략의 전체 근거를 비교한다', () => {
+  const processBook = {
+    title: '톡톡 소리 나는 빵 만들기',
+    description: '의성어가 한 번 나오지만 반죽부터 굽기까지 전 과정을 단계별로 따라 완성하는 과정을 보여 준다.'
+  };
+  const emotionalBook = {
+    title: '비밀이 생긴 날',
+    description: '갑자기 비밀을 알게 된 아이의 불안한 마음과 감정의 변화를 여러 관점에서 섬세하게 다룬다.'
+  };
+
+  const processRanking = rankInteractionStrategies(processBook);
+  assert.equal(processRanking.length, 8);
+  assert.equal(processRanking[0].strategy, '순서 다시 말하기');
+  assert.ok(processRanking[0].score > processRanking.find(item => item.strategy === '소리와 말놀이').score);
+  assert.equal(selectInteractionStrategy(emotionalBook), '감정과 관점 나누기');
 });
 
 test('품질 탈락 책만 사유를 붙여 자동 재작성한다', async () => {
