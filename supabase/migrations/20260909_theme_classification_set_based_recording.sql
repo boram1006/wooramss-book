@@ -1,3 +1,5 @@
+-- Replace the row-by-row bulk recorder with one set-based upsert. Repeated book
+-- loads that contain no new source or record id no longer rewrite queue rows.
 create or replace function public.record_unclassified_themes(
   p_items jsonb
 ) returns void

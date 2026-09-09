@@ -2,8 +2,7 @@
 const { createClient } = require('@supabase/supabase-js');
 const { inferThemes } = require('../lib/theme-taxonomy');
 const {
-  loadThemeOverrides,
-  recordUnclassifiedObservations
+  loadThemeOverrides
 } = require('../lib/theme-classification-store');
 
 // Supabase 클라이언트 초기화
@@ -209,15 +208,6 @@ module.exports = async (req, res) => {
     let overrides = new Map();
     if (supabaseTableName === 'books') {
       overrides = await loadThemeOverrides(supabase);
-      await recordUnclassifiedObservations(
-        supabase,
-        data.map(book => ({
-          value: book.themes,
-          source: 'supabase.books',
-          recordId: book.id
-        })),
-        overrides
-      );
     }
 
     // Airtable 형식으로 변환하여 반환 (하위 호환성)

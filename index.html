@@ -6293,6 +6293,7 @@
                             if (JSON.stringify(normalizedSelected) !== JSON.stringify(selectedInterests)) {
                                 onChangeInterests(normalizedSelected);
                             }
+                            loadClassifications(1);
                         }
                     } catch (e) {
                         if (!cancelled) {
