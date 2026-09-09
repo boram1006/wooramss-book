@@ -4,6 +4,7 @@
 const { createClient } = require('@supabase/supabase-js');
 const { normalizeThemes, inferThemes } = require('../lib/theme-taxonomy');
 const { inferAladinThemes } = require('../lib/aladin-book-themes');
+const { fetchAllRows } = require('../lib/supabase-pagination');
 const {
   buildFallbackRecommendationReason,
   cleanGeneratedRecommendationReason,
@@ -1025,28 +1026,10 @@ module.exports = async (req, res) => {
 
     const supabase = getSupabaseClient();
 
-    // Books (내 DB) 전체
-    let allBooksData = [];
-    let from = 0;
-    const pageSize = 1000;
-    let hasMore = true;
-
-    while (hasMore) {
-      const { data: pageData, error: booksError } = await supabase
-        .from('books')
-        .select('*')
-        .range(from, from + pageSize - 1);
-
-      if (booksError) throw new Error(`Supabase Books error: ${booksError.message}`);
-
-      if (pageData && pageData.length > 0) {
-        allBooksData = allBooksData.concat(pageData);
-        from += pageSize;
-        hasMore = pageData.length === pageSize;
-      } else {
-        hasMore = false;
-      }
-    }
+    const [allBooksData, allLogsData] = await Promise.all([
+      fetchAllRows(supabase, 'books'),
+      fetchAllRows(supabase, 'reading_logs')
+    ]);
 
     const allBooks = (allBooksData || []).map(book => ({
       id: book.id,
@@ -1069,28 +1052,6 @@ module.exports = async (req, res) => {
 
     // ✅ B: 내 DB 기준 테마 통계
     const themeStats = buildThemeStats(allBooks);
-
-    // ReadingLog 전체
-    let allLogsData = [];
-    from = 0;
-    hasMore = true;
-
-    while (hasMore) {
-      const { data: pageData, error: logsError } = await supabase
-        .from('reading_logs')
-        .select('*')
-        .range(from, from + pageSize - 1);
-
-      if (logsError) throw new Error(`Supabase ReadingLog error: ${logsError.message}`);
-
-      if (pageData && pageData.length > 0) {
-        allLogsData = allLogsData.concat(pageData);
-        from += pageSize;
-        hasMore = pageData.length === pageSize;
-      } else {
-        hasMore = false;
-      }
-    }
 
     const readingLogs = (allLogsData || []).map(log => ({
       id: log.id,

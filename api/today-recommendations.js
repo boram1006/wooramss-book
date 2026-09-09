@@ -6,6 +6,7 @@ const { normalizeThemes, inferThemes } = require('../lib/theme-taxonomy');
 const {
   loadThemeOverrides
 } = require('../lib/theme-classification-store');
+const { fetchAllRows } = require('../lib/supabase-pagination');
 const {
   buildReadingSignal,
   cleanOwnedFallbackDescription,
@@ -955,8 +956,6 @@ module.exports = async (req, res) => {
 
   try {
     const supabase = getSupabaseClient();
-    const themeOverridesPromise = loadThemeOverrides(supabase);
-
     // 1. 아이 프로필 (쿼리 파라미터)
     const baseProfile = {
       ageMonths: req.query.ageMonths ? parseInt(req.query.ageMonths) : null,
@@ -964,34 +963,13 @@ module.exports = async (req, res) => {
       booksPerDay: req.query.booksPerDay ? parseFloat(req.query.booksPerDay) : null,
     };
 
-    // 2. Supabase에서 데이터 가져오기
-    // Books 테이블 (모든 데이터 가져오기 - 페이지네이션)
-    let allBooksData = [];
-    let from = 0;
-    const pageSize = 1000;
-    let hasMore = true;
-
-    while (hasMore) {
-      const { data: pageData, error: booksError } = await supabase
-        .from('books')
-        .select('*')
-        .range(from, from + pageSize - 1);
-
-      if (booksError) {
-        throw new Error(`Supabase Books error: ${booksError.message}`);
-      }
-
-      if (pageData && pageData.length > 0) {
-        allBooksData = allBooksData.concat(pageData);
-        from += pageSize;
-        hasMore = pageData.length === pageSize;
-      } else {
-        hasMore = false;
-      }
-    }
-
-    const booksData = allBooksData;
-    const themeOverrides = await themeOverridesPromise;
+    // 2. 책·독서 기록·분류 규칙을 동시에 가져옵니다. 각 테이블의
+    // 1000행 이후 페이지도 첫 응답의 전체 건수를 기준으로 병렬 조회합니다.
+    const [booksData, logsData, themeOverrides] = await Promise.all([
+      fetchAllRows(supabase, 'books'),
+      fetchAllRows(supabase, 'reading_logs'),
+      loadThemeOverrides(supabase)
+    ]);
 
     // Airtable 형식으로 변환 (하위 호환성)
     const allBooks = (booksData || []).map(book => ({
@@ -1014,32 +992,6 @@ module.exports = async (req, res) => {
 
     // ✅ B: 내 DB 기준 테마 통계
     const themeStats = buildThemeStats(allBooks);
-
-    // ReadingLog 테이블 (모든 데이터 가져오기 - 페이지네이션)
-    let allLogsData = [];
-    from = 0;
-    hasMore = true;
-
-    while (hasMore) {
-      const { data: pageData, error: logsError } = await supabase
-        .from('reading_logs')
-        .select('*')
-        .range(from, from + pageSize - 1);
-
-      if (logsError) {
-        throw new Error(`Supabase ReadingLog error: ${logsError.message}`);
-      }
-
-      if (pageData && pageData.length > 0) {
-        allLogsData = allLogsData.concat(pageData);
-        from += pageSize;
-        hasMore = pageData.length === pageSize;
-      } else {
-        hasMore = false;
-      }
-    }
-
-    const logsData = allLogsData;
 
     // Airtable 형식으로 변환 (하위 호환성)
     const readingLogs = (logsData || []).map(log => ({

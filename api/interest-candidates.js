@@ -12,23 +12,13 @@ const {
   recordUnclassifiedObservations,
   validateClassification
 } = require('../lib/theme-classification-store');
+const { fetchAllRows } = require('../lib/supabase-pagination');
 
 function getSupabaseClient() {
   const url = process.env.SUPABASE_URL;
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY;
   if (!url || !key) throw new Error('Supabase configuration error');
   return createClient(url, key);
-}
-
-async function fetchAll(supabase, table) {
-  const rows = [];
-  const pageSize = 1000;
-  for (let from = 0; ; from += pageSize) {
-    const { data, error } = await supabase.from(table).select('*').range(from, from + pageSize - 1);
-    if (error) throw new Error(error.message);
-    rows.push(...(data || []));
-    if (!data || data.length < pageSize) return rows;
-  }
 }
 
 function reactionWeight(reaction) {
@@ -120,8 +110,8 @@ module.exports = async (req, res) => {
     if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
 
     const [books, logs, overrides] = await Promise.all([
-      fetchAll(supabase, 'books'),
-      fetchAll(supabase, 'reading_logs'),
+      fetchAllRows(supabase, 'books'),
+      fetchAllRows(supabase, 'reading_logs'),
       loadThemeOverrides(supabase)
     ]);
     const autoTop = calculateAutomaticInterests(books, logs, overrides);
