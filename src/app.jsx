@@ -283,11 +283,20 @@ const { useState, useEffect, useRef } = React;
                         const data = await response.json();
                         if (cancelled) return;
                         if (!data.exists) {
-                            await fetch('/api/supabase?table=ChildSettings', {
-                                method: 'PUT',
-                                headers: { 'Content-Type': 'application/json' },
-                                body: JSON.stringify({ profile: childProfile, selectedInterests })
-                            });
+                            const hasLocalSettings = Boolean(
+                                childProfile.birthDate
+                                || childProfile.gender
+                                || selectedInterests.length
+                                || Number(childProfile.booksPerDay || 2) !== 2
+                                || !['', 'normal', '보통'].includes(childProfile.emotionSensitivity || '')
+                            );
+                            if (hasLocalSettings) {
+                                await fetch('/api/supabase?table=ChildSettings', {
+                                    method: 'PUT',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({ profile: childProfile, selectedInterests })
+                                });
+                            }
                             return;
                         }
                         if (data.profile) {
