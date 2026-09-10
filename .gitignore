@@ -8,6 +8,8 @@ public/
 
 # Testing
 /coverage
+test-results/
+playwright-report/
 
 # Production
 /build

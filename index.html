@@ -1928,6 +1928,124 @@
                 animation-iteration-count: 1 !important;
             }
         }
+
+        .notice-region {
+            position: fixed;
+            z-index: 5000;
+            right: clamp(14px, 3vw, 34px);
+            bottom: clamp(14px, 3vw, 34px);
+            display: grid;
+            width: min(390px, calc(100vw - 28px));
+            gap: 12px;
+            pointer-events: none;
+        }
+
+        .clay-notice {
+            display: grid;
+            grid-template-columns: auto 1fr auto;
+            align-items: center;
+            gap: 12px;
+            min-height: 58px;
+            padding: 12px 13px;
+            border: 1px solid rgba(45, 61, 52, 0.08);
+            border-radius: 20px;
+            background: rgba(252, 250, 244, 0.97);
+            color: #30473c;
+            box-shadow: 0 14px 34px rgba(52, 70, 60, 0.15), inset 0 1px 0 rgba(255, 255, 255, 0.9);
+            font-size: 14px;
+            font-weight: 700;
+            line-height: 1.45;
+            pointer-events: auto;
+            animation: notice-in 180ms ease-out;
+            backdrop-filter: blur(12px);
+        }
+
+        .clay-notice-mark {
+            display: grid;
+            place-items: center;
+            width: 34px;
+            height: 34px;
+            border-radius: 12px;
+            background: #dcefe3;
+            color: #557e68;
+            box-shadow: inset 0 -2px 4px rgba(52, 88, 68, 0.08);
+        }
+
+        .clay-notice-error .clay-notice-mark {
+            background: #f6e2dd;
+            color: #a45f50;
+        }
+
+        .clay-notice-close {
+            display: grid;
+            place-items: center;
+            width: 30px;
+            height: 30px;
+            padding: 0;
+            border: 0;
+            border-radius: 10px;
+            background: transparent;
+            color: #738078;
+            font: inherit;
+            font-size: 20px;
+            cursor: pointer;
+        }
+
+        .clay-notice-close:hover {
+            background: rgba(85, 126, 104, 0.1);
+        }
+
+        .clay-confirm-overlay {
+            z-index: 5100;
+        }
+
+        .clay-confirm-panel {
+            width: min(410px, calc(100vw - 32px));
+            padding: 28px;
+            border: 1px solid rgba(45, 61, 52, 0.08);
+            border-radius: 28px;
+            background: #fcfaf4;
+            color: #30473c;
+            text-align: center;
+            box-shadow: 0 28px 70px rgba(41, 60, 49, 0.2), inset 0 1px 0 #fff;
+        }
+
+        .clay-confirm-mark {
+            display: grid;
+            place-items: center;
+            width: 48px;
+            height: 48px;
+            margin: 0 auto 14px;
+            border-radius: 17px;
+            background: #dcefe3;
+            color: #557e68;
+            box-shadow: inset 0 -3px 5px rgba(52, 88, 68, 0.09);
+        }
+
+        .clay-confirm-panel h2 {
+            margin: 0 0 9px;
+            font-family: 'Gaegu', cursive;
+            font-size: 25px;
+        }
+
+        .clay-confirm-panel p {
+            margin: 0;
+            white-space: pre-line;
+            color: #66736c;
+            line-height: 1.6;
+        }
+
+        .clay-confirm-actions {
+            display: grid;
+            grid-template-columns: 1fr 1.25fr;
+            gap: 10px;
+            margin-top: 24px;
+        }
+
+        @keyframes notice-in {
+            from { opacity: 0; transform: translateY(10px) scale(0.98); }
+            to { opacity: 1; transform: translateY(0) scale(1); }
+        }
     </style>
 </head>
 <body>

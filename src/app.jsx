@@ -8,6 +8,89 @@ const { useState, useEffect, useRef } = React;
         const RECOMMENDATION_CACHE_VERSION = 3;
         const OWNED_RECOMMENDATION_CACHE_VERSION = 3;
 
+        function notify(message, options = {}) {
+            window.dispatchEvent(new CustomEvent('doran:notice', {
+                detail: {
+                    message: String(message || ''),
+                    tone: options.tone || (/오류|실패|필요|없습니다/.test(String(message)) ? 'error' : 'success')
+                }
+            }));
+        }
+
+        function confirmAction(message) {
+            return new Promise(resolve => {
+                window.dispatchEvent(new CustomEvent('doran:confirm', {
+                    detail: { message: String(message || ''), resolve }
+                }));
+            });
+        }
+
+        function NotificationCenter() {
+            const [notices, setNotices] = useState([]);
+            const [confirmation, setConfirmation] = useState(null);
+
+            useEffect(() => {
+                const handleNotice = (event) => {
+                    const notice = {
+                        id: Date.now() + '-' + Math.random(),
+                        message: event.detail?.message || '',
+                        tone: event.detail?.tone || 'success'
+                    };
+                    setNotices(current => [...current.slice(-2), notice]);
+                    window.setTimeout(() => {
+                        setNotices(current => current.filter(item => item.id !== notice.id));
+                    }, 4200);
+                };
+                window.addEventListener('doran:notice', handleNotice);
+                const handleConfirm = event => setConfirmation(event.detail || null);
+                window.addEventListener('doran:confirm', handleConfirm);
+                return () => {
+                    window.removeEventListener('doran:notice', handleNotice);
+                    window.removeEventListener('doran:confirm', handleConfirm);
+                };
+            }, []);
+
+            return (
+                <>
+                    <div className="notice-region" aria-live="polite" aria-atomic="false">
+                        {notices.map(notice => (
+                            <div className={'clay-notice clay-notice-' + notice.tone} role="status" key={notice.id}>
+                                <span className="clay-notice-mark">
+                                    <AppIcon name={notice.tone === 'error' ? 'settings' : 'check'} size={18} />
+                                </span>
+                                <span>{notice.message}</span>
+                                <button
+                                    className="clay-notice-close"
+                                    type="button"
+                                    aria-label="알림 닫기"
+                                    onClick={() => setNotices(current => current.filter(item => item.id !== notice.id))}
+                                >×</button>
+                            </div>
+                        ))}
+                    </div>
+                    {confirmation && (
+                        <div className="clay-modal-overlay clay-confirm-overlay" role="presentation">
+                            <div className="clay-confirm-panel" role="alertdialog" aria-modal="true" aria-labelledby="clay-confirm-title">
+                                <span className="clay-confirm-mark"><AppIcon name="brand" size={21} /></span>
+                                <h2 id="clay-confirm-title">한 번 확인해주세요</h2>
+                                <p>{confirmation.message}</p>
+                                <div className="clay-confirm-actions">
+                                    <button type="button" className="clay-button clay-button-secondary" onClick={() => {
+                                        confirmation.resolve(false);
+                                        setConfirmation(null);
+                                    }}>취소</button>
+                                    <button type="button" className="clay-button" autoFocus onClick={() => {
+                                        confirmation.resolve(true);
+                                        setConfirmation(null);
+                                    }}>확인</button>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+                </>
+            );
+        }
+
         function computeAgeMonthsFromBirthdate(birthDateString) {
             if (!birthDateString) return null;
             const parts = birthDateString.split('-');
@@ -191,6 +274,30 @@ const { useState, useEffect, useRef } = React;
                 localStorage.setItem('selectedInterests', JSON.stringify(selectedInterests));
             }, [selectedInterests]);
 
+            useEffect(() => {
+                let cancelled = false;
+                const loadSavedSettings = async () => {
+                    try {
+                        const response = await fetch('/api/child-settings', { cache: 'no-store' });
+                        if (!response.ok) throw new Error('server settings unavailable');
+                        const data = await response.json();
+                        if (cancelled) return;
+                        if (data.profile) {
+                            setChildProfile(data.profile);
+                            localStorage.setItem('childProfile', JSON.stringify(data.profile));
+                        }
+                        if (Array.isArray(data.selectedInterests)) {
+                            setSelectedInterests(data.selectedInterests);
+                            localStorage.setItem('selectedInterests', JSON.stringify(data.selectedInterests));
+                        }
+                    } catch (error) {
+                        console.warn('[child-settings] 브라우저에 저장된 설정을 사용합니다.', error);
+                    }
+                };
+                loadSavedSettings();
+                return () => { cancelled = true; };
+            }, []);
+
             const [notInterestedBooks, setNotInterestedBooks] = useState(() => {
                 try {
                     const saved = localStorage.getItem('notInterestedBooks');
@@ -206,7 +313,7 @@ const { useState, useEffect, useRef } = React;
                 : (Number.isFinite(parseInt(childProfile.ageMonths, 10)) ? parseInt(childProfile.ageMonths, 10) : '');
 
             // 아이 프로필 저장
-            const saveChildProfile = (profile) => {
+            const saveChildProfile = async (profile, interests = selectedInterests) => {
                 const derivedAgeMonths = computeAgeMonthsFromBirthdate(profile.birthDate);
                 const normalizedProfile = {
                     ...profile,
@@ -214,6 +321,15 @@ const { useState, useEffect, useRef } = React;
                 };
                 setChildProfile(normalizedProfile);
                 localStorage.setItem('childProfile', JSON.stringify(normalizedProfile));
+                localStorage.setItem('selectedInterests', JSON.stringify(interests));
+                const response = await fetch('/api/child-settings', {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ profile: normalizedProfile, selectedInterests: interests })
+                });
+                const data = await response.json().catch(() => ({}));
+                if (!response.ok) throw new Error(data.error || '설정을 서버에 저장하지 못했어요.');
+                return data;
                 // 추천 재로드는 useEffect([effectiveAgeMonths, ...])가 리렌더 후 올바른 값으로 처리
             };
 
@@ -400,7 +516,7 @@ const { useState, useEffect, useRef } = React;
                     });
                     const data = await response.json();
                     if (!data.success) {
-                        alert('오류: ' + (data.error || '제외 실패'));
+                        notify('오류: ' + (data.error || '제외 실패'));
                         return false;
                     }
                     setAladinNewBooks(prev => prev.filter(item =>
@@ -409,7 +525,7 @@ const { useState, useEffect, useRef } = React;
                     return true;
                 } catch (error) {
                     console.error('제외 처리 오류:', error);
-                    alert('제외 처리 중 오류가 발생했습니다');
+                    notify('제외 처리 중 오류가 발생했습니다');
                     return false;
                 }
             }
@@ -454,14 +570,14 @@ const { useState, useEffect, useRef } = React;
                     }
                 }).catch((error) => {
                     console.error('카메라 접근 오류:', error);
-                    alert('카메라 접근 권한이 필요합니다. 브라우저 설정에서 카메라 권한을 허용해주세요.');
+                    notify('카메라 접근 권한이 필요합니다. 브라우저 설정에서 카메라 권한을 허용해주세요.');
                     setSearchScanOpen(false);
                 });
             };
 
             const handleSearchScanStart = () => {
                 if (!window.Quagga) {
-                    alert('바코드 스캐너 라이브러리를 불러올 수 없습니다. 페이지를 새로고침해주세요.');
+                    notify('바코드 스캐너 라이브러리를 불러올 수 없습니다. 페이지를 새로고침해주세요.');
                     return;
                 }
                 setSearchScanOpen(true);
@@ -476,7 +592,7 @@ const { useState, useEffect, useRef } = React;
                 const video = searchVideoRef.current;
                 const canvas = searchCanvasRef.current;
                 if (!video.videoWidth || !video.videoHeight) {
-                    alert('카메라 준비 중입니다. 잠시 후 다시 시도해주세요.');
+                    notify('카메라 준비 중입니다. 잠시 후 다시 시도해주세요.');
                     return;
                 }
                 const width = video.videoWidth;
@@ -557,11 +673,11 @@ const { useState, useEffect, useRef } = React;
                     if (data.success) {
                         setSearchResults(data.books || []);
                     } else {
-                        alert('검색 실패: ' + data.error);
+                        notify('검색 실패: ' + data.error);
                     }
                 } catch (error) {
                     console.error('검색 오류:', error);
-                    alert('검색 중 오류가 발생했습니다');
+                    notify('검색 중 오류가 발생했습니다');
                 } finally {
                     setSearchLoading(false);
                 }
@@ -592,17 +708,17 @@ const { useState, useEffect, useRef } = React;
                         
                         const data = await response.json();
                         if (data.success) {
-                            alert('관심책에 추가되었습니다!');
+                            notify('관심책에 추가되었습니다!');
                             await loadData();
                         } else {
-                            alert('오류: ' + (data.error || '저장 실패'));
+                            notify('오류: ' + (data.error || '저장 실패'));
                         }
                     } else {
                         // 책이 없으면 조용히 무시 (팝업 없음)
                     }
                 } catch (error) {
                     console.error('관심책 추가 오류:', error);
-                    alert('관심책 추가 중 오류가 발생했습니다');
+                    notify('관심책 추가 중 오류가 발생했습니다');
                 }
             }
 
@@ -643,12 +759,12 @@ const { useState, useEffect, useRef } = React;
                     } else {
                         const error = await response.json();
                         console.error('❌ 오류:', error);
-                        alert('오류: ' + (error.error || '알 수 없는 오류'));
+                        notify('오류: ' + (error.error || '알 수 없는 오류'));
                         return false;
                     }
                 } catch (error) {
                     console.error('❌ 로그 업데이트 실패:', error);
-                    alert('오류: ' + error.message);
+                    notify('오류: ' + error.message);
                     return false;
                 }
             }
@@ -1337,9 +1453,9 @@ const { useState, useEffect, useRef } = React;
                                                         </div>
                                                     )}
                                                     <button
-                                                        onClick={(e) => {
+                                                        onClick={async (e) => {
                                                             e.stopPropagation();
-                                                            if (confirm('이 책을 추천 목록에서 빼드릴게요. 괜찮으세요?')) {
+                                                            if (await confirmAction('이 책을 추천 목록에서 빼드릴게요. 괜찮으세요?')) {
                                                                 skipDbBook(item.book.id);
                                                             }
                                                         }}
@@ -1451,9 +1567,9 @@ const { useState, useEffect, useRef } = React;
                                                     <button
                                                         aria-label={`${book.title} 추천에서 제외`}
                                                         title="이 추천 숨기기"
-                                                        onClick={(e) => {
+                                                        onClick={async (e) => {
                                                             e.stopPropagation();
-                                                            if (confirm('이 책을 신간 추천에서 제외할까요?')) {
+                                                            if (await confirmAction('이 책을 신간 추천에서 제외할까요?')) {
                                                                 excludeAladinBook(book, 'user_excluded');
                                                             }
                                                         }}
@@ -1642,6 +1758,7 @@ const { useState, useEffect, useRef } = React;
                             onSelectBook={selectBook}
                             setShowSearchModal={setShowSearchModal}
                             setShowReadPhotoModal={setShowReadPhotoModal}
+                            onDataUpdate={loadData}
                         />
                     )}
 
@@ -1993,7 +2110,7 @@ const { useState, useEffect, useRef } = React;
                                     const data = await response.json();
                                     
                                     if (data.success) {
-                                        alert(data.isNew ? '새 책이 추가되었습니다!' : '이미 등록된 책입니다!');
+                                        notify(data.isNew ? '새 책이 추가되었습니다!' : '이미 등록된 책입니다!');
                                         // 데이터 새로고침 (books 배열 업데이트) - 강제 새로고침
                                         setLoading(true);
                                         await loadData();
@@ -2008,11 +2125,11 @@ const { useState, useEffect, useRef } = React;
                                             }, 500);
                                         }
                                     } else {
-                                        alert('오류: ' + data.error);
+                                        notify('오류: ' + data.error);
                                     }
                                 } catch (error) {
                                     console.error('책 추가 오류:', error);
-                                    alert('책 추가 중 오류가 발생했습니다');
+                                    notify('책 추가 중 오류가 발생했습니다');
                                 }
                             }}
                             onAddToInterested={async () => {
@@ -2039,18 +2156,18 @@ const { useState, useEffect, useRef } = React;
                                         
                                         const data = await response.json();
                                         if (data.success) {
-                                            alert('관심책에 추가되었습니다!');
+                                            notify('관심책에 추가되었습니다!');
                                             await loadData();
                                             setSelectedAladinBook(null);
                                         } else {
-                                            alert('오류: ' + (data.error || '저장 실패'));
+                                            notify('오류: ' + (data.error || '저장 실패'));
                                         }
                                     } else {
-                                        alert('먼저 "책 추가하기"를 눌러 책을 등록해주세요.');
+                                        notify('먼저 "책 추가하기"를 눌러 책을 등록해주세요.');
                                     }
                                 } catch (error) {
                                     console.error('관심책 추가 오류:', error);
-                                    alert('관심책 추가 중 오류가 발생했습니다');
+                                    notify('관심책 추가 중 오류가 발생했습니다');
                                 }
                             }}
                         />
@@ -2152,16 +2269,16 @@ const { useState, useEffect, useRef } = React;
                     const successMsg = result.aladinData?.found 
                         ? '✅ 알라딘에서 정보를 찾아 책을 추가했어요!' 
                         : '✅ AI가 책 정보를 생성해 추가했어요!';
-                    alert(successMsg);
+                    notify(successMsg);
                     return true;
                 } else {
-                    alert('❌ 추가 실패');
+                    notify('❌ 추가 실패');
                     return false;
                 }
 
             } catch (error) {
                 console.error('책 추가 오류:', error);
-                alert('❌ 오류 발생: ' + error.message);
+                notify('❌ 오류 발생: ' + error.message);
                 return false;
             }
         }
@@ -2183,7 +2300,7 @@ const { useState, useEffect, useRef } = React;
 
             const handleSearch = async () => {
                 if (!title.trim()) {
-                    alert('책 제목을 입력해주세요!');
+                    notify('책 제목을 입력해주세요!');
                     return;
                 }
                 
@@ -2195,12 +2312,12 @@ const { useState, useEffect, useRef } = React;
                     if (data.success && data.books && data.books.length > 0) {
                         setSearchResults(data.books);
                     } else {
-                        alert('검색 결과가 없습니다. 다른 제목으로 검색해보세요.');
+                        notify('검색 결과가 없습니다. 다른 제목으로 검색해보세요.');
                         setSearchResults([]);
                     }
                 } catch (error) {
                     console.error('검색 오류:', error);
-                    alert('검색 중 오류가 발생했습니다');
+                    notify('검색 중 오류가 발생했습니다');
                 } finally {
                     setSearching(false);
                 }
@@ -2234,7 +2351,7 @@ const { useState, useEffect, useRef } = React;
                     }
                 }).catch((error) => {
                     console.error('카메라 접근 오류:', error);
-                    alert('카메라 접근 권한이 필요합니다. 브라우저 설정에서 카메라 권한을 허용해주세요.');
+                    notify('카메라 접근 권한이 필요합니다. 브라우저 설정에서 카메라 권한을 허용해주세요.');
                     setScanning(false);
                 });
             };
@@ -2242,7 +2359,7 @@ const { useState, useEffect, useRef } = React;
             // 바코드 사진 촬영 시작
             const handleStartScan = () => {
                 if (!window.Quagga) {
-                    alert('바코드 스캐너 라이브러리를 불러올 수 없습니다. 페이지를 새로고침해주세요.');
+                    notify('바코드 스캐너 라이브러리를 불러올 수 없습니다. 페이지를 새로고침해주세요.');
                     return;
                 }
 
@@ -2266,7 +2383,7 @@ const { useState, useEffect, useRef } = React;
                 const video = videoRef.current;
                 const canvas = canvasRef.current;
                 if (!video.videoWidth || !video.videoHeight) {
-                    alert('카메라 준비 중입니다. 잠시 후 다시 시도해주세요.');
+                    notify('카메라 준비 중입니다. 잠시 후 다시 시도해주세요.');
                     return;
                 }
                 const width = video.videoWidth;
@@ -2344,12 +2461,12 @@ const { useState, useEffect, useRef } = React;
                         setSelectedBook(data.books[0]);
                         setSearchResults(data.books);
                     } else {
-                        alert('스캔한 ISBN으로 책을 찾을 수 없습니다. 수동으로 검색해주세요.');
+                        notify('스캔한 ISBN으로 책을 찾을 수 없습니다. 수동으로 검색해주세요.');
                         setTitle(isbn);
                     }
                 } catch (error) {
                     console.error('ISBN 검색 오류:', error);
-                    alert('책 검색 중 오류가 발생했습니다.');
+                    notify('책 검색 중 오류가 발생했습니다.');
                 } finally {
                     setSearching(false);
                 }
@@ -2385,11 +2502,11 @@ const { useState, useEffect, useRef } = React;
                     if (data.success) {
                         await onAdd(selectedBook.title, selectedBook.author);
                     } else {
-                        alert('오류: ' + data.error);
+                        notify('오류: ' + data.error);
                     }
                 } catch (error) {
                     console.error('책 추가 오류:', error);
-                    alert('책 추가 중 오류가 발생했습니다');
+                    notify('책 추가 중 오류가 발생했습니다');
                 } finally {
                     setLoading(false);
                 }
@@ -2947,7 +3064,7 @@ const { useState, useEffect, useRef } = React;
                     const existingMessage = data.existingLogCount
                         ? ` 이미 기록된 ${data.existingLogCount}권은 기존 기록을 유지했습니다.`
                         : '';
-                    alert(`${data.createdLogCount}권의 읽기 기록을 추가했습니다.${existingMessage}`);
+                    notify(`${data.createdLogCount}권의 읽기 기록을 추가했습니다.${existingMessage}`);
                     await onComplete();
                 } catch (registrationError) {
                     setError(registrationError.message);
@@ -3383,7 +3500,7 @@ const { useState, useEffect, useRef } = React;
             );
         }
 
-        function FilterView({ filterType, books, readingLogs, childAgeMonths, onBack, onSelectBook, setShowSearchModal, setShowReadPhotoModal }) {
+        function FilterView({ filterType, books, readingLogs, childAgeMonths, onBack, onSelectBook, setShowSearchModal, setShowReadPhotoModal, onDataUpdate }) {
             const filterInfo = {
                 'read': { title: '✅ 읽은 책', icon: '✅', color: '#98D8C8' },
                 'loved': { title: '😍 최애 책', icon: '😍', color: '#FFB347' },
@@ -3491,7 +3608,7 @@ const { useState, useEffect, useRef } = React;
                                             <button
                                                 onClick={async (e) => {
                                                     e.stopPropagation();
-                                                    if (!confirm('이 책의 부모 가이드를 생성하시겠습니까?\n(AI 가이드 생성에 시간이 걸립니다)')) {
+                                                    if (!await confirmAction('이 책의 부모 가이드를 생성하시겠습니까?\nAI 가이드 생성에 시간이 걸립니다.')) {
                                                         return;
                                                     }
                                                     
@@ -3510,14 +3627,14 @@ const { useState, useEffect, useRef } = React;
                                                         const data = await response.json();
                                                         
                                                         if (data.success) {
-                                                            alert('부모 가이드가 생성되었습니다!');
-                                                            await loadData();
+                                                            notify('부모 가이드가 생성되었습니다!');
+                                                            await onDataUpdate();
                                                         } else {
-                                                            alert('가이드 생성에 실패했습니다: ' + (data.error || '알 수 없는 오류'));
+                                                            notify('가이드 생성에 실패했습니다: ' + (data.error || '알 수 없는 오류'));
                                                         }
                                                     } catch (error) {
                                                         console.error('가이드 생성 오류:', error);
-                                                        alert('가이드 생성 중 오류가 발생했습니다');
+                                                        notify('가이드 생성 중 오류가 발생했습니다');
                                                     }
                                                 }}
                                                 style={{
@@ -3783,17 +3900,17 @@ const { useState, useEffect, useRef } = React;
                     
                     if (data.success) {
                         setIsInInterested(!isInInterested);
-                        alert(!isInInterested ? '관심책에 추가되었습니다!' : '관심책에서 제거되었습니다.');
+                        notify(!isInInterested ? '관심책에 추가되었습니다!' : '관심책에서 제거되었습니다.');
                         // 데이터 새로고침
                         if (onDataUpdate) {
                             await onDataUpdate();
                         }
                     } else {
-                        alert('오류: ' + (data.error || '저장 실패'));
+                        notify('오류: ' + (data.error || '저장 실패'));
                     }
                 } catch (error) {
                     console.error('관심책 저장 오류:', error);
-                    alert('관심책 저장 중 오류가 발생했습니다');
+                    notify('관심책 저장 중 오류가 발생했습니다');
                 }
             };
 
@@ -3819,7 +3936,7 @@ const { useState, useEffect, useRef } = React;
                     // 3초 후 저장 완료 표시 제거
                     setTimeout(() => setJustSaved(false), 3000);
                 } else {
-                    alert('❌ 저장 실패했어요. 다시 시도해주세요!');
+                    notify('❌ 저장 실패했어요. 다시 시도해주세요!');
                 }
             };
 
@@ -3833,7 +3950,7 @@ const { useState, useEffect, useRef } = React;
             const handleCheckLibrary = async () => {
                 const isbn = book.fields['ISBN'];
                 if (!isbn) {
-                    alert('ISBN 정보가 없어 조회할 수 없습니다.');
+                    notify('ISBN 정보가 없어 조회할 수 없습니다.');
                     return;
                 }
                 setLibraryLoading(true);
@@ -4304,9 +4421,11 @@ const { useState, useEffect, useRef } = React;
 
         function SettingsView({ profile, onSave, selectedInterests, onChangeInterests }) {
             const [birthDate, setBirthDate] = useState(profile.birthDate || '');
-            const [gender, setGender] = useState(profile.gender || '');
+            const [gender, setGender] = useState(profile.gender === '남아' ? 'male' : profile.gender === '여아' ? 'female' : (profile.gender || ''));
             const [booksPerDay, setBooksPerDay] = useState(profile.booksPerDay || 2);
-            const [emotionSensitivity, setEmotionSensitivity] = useState(profile.emotionSensitivity || 'normal');
+            const [emotionSensitivity, setEmotionSensitivity] = useState(
+                ({ '높음': 'high', '보통': 'normal', '낮음': 'low' })[profile.emotionSensitivity] || profile.emotionSensitivity || 'normal'
+            );
             const [saving, setSaving] = useState(false);
             const computedAgeMonths = computeAgeMonthsFromBirthdate(birthDate);
             const hasComputedAgeMonths = Number.isFinite(computedAgeMonths);
@@ -4480,19 +4599,22 @@ const { useState, useEffect, useRef } = React;
                 }
             };
 
-            const handleSave = () => {
+            const handleSave = async () => {
                 setSaving(true);
-                onSave({
-                    birthDate,
-                    ageMonths: hasComputedAgeMonths ? computedAgeMonths : '',
-                    gender,
-                    booksPerDay: parseInt(booksPerDay) || 2,
-                    emotionSensitivity
-                });
-                setTimeout(() => {
+                try {
+                    await onSave({
+                        birthDate,
+                        ageMonths: hasComputedAgeMonths ? computedAgeMonths : '',
+                        gender,
+                        booksPerDay: parseInt(booksPerDay) || 2,
+                        emotionSensitivity
+                    }, selectedInterests);
+                    notify('설정이 안전하게 저장되었습니다.');
+                } catch (error) {
+                    notify(error.message || '설정 저장에 실패했습니다.', { tone: 'error' });
+                } finally {
                     setSaving(false);
-                    alert('설정이 저장되었습니다!');
-                }, 300);
+                }
             };
 
             return (
@@ -4767,10 +4889,10 @@ const { useState, useEffect, useRef } = React;
                                 성별 (선택)
                             </label>
                             <div style={{ display: 'flex', gap: '0.5rem' }}>
-                                {['남아', '여아'].map(g => (
-                                    <button className={`settings-choice ${gender === g ? 'is-selected' : ''}`}
-                                        key={g}
-                                        onClick={() => setGender(g)}
+                                {[{ value: 'male', label: '남아' }, { value: 'female', label: '여아' }].map(option => (
+                                    <button className={`settings-choice ${gender === option.value ? 'is-selected' : ''}`}
+                                        key={option.value}
+                                        onClick={() => setGender(option.value)}
                                         style={{
                                             flex: 1,
                                             padding: '0.75rem',
@@ -4781,7 +4903,7 @@ const { useState, useEffect, useRef } = React;
                                             fontSize: '0.9rem'
                                         }}
                                     >
-                                        {g}
+                                        {option.label}
                                     </button>
                                 ))}
                             </div>
@@ -4820,10 +4942,10 @@ const { useState, useEffect, useRef } = React;
                                 감정 예민도
                             </label>
                             <div style={{ display: 'flex', gap: '0.5rem' }}>
-                                {['높음', '보통', '낮음'].map(level => (
-                                    <button className={`settings-choice ${emotionSensitivity === level ? 'is-selected' : ''}`}
-                                        key={level}
-                                        onClick={() => setEmotionSensitivity(level)}
+                                {[{ value: 'high', label: '높음' }, { value: 'normal', label: '보통' }, { value: 'low', label: '낮음' }].map(option => (
+                                    <button className={`settings-choice ${emotionSensitivity === option.value ? 'is-selected' : ''}`}
+                                        key={option.value}
+                                        onClick={() => setEmotionSensitivity(option.value)}
                                         style={{
                                             flex: 1,
                                             padding: '0.75rem',
@@ -4834,7 +4956,7 @@ const { useState, useEffect, useRef } = React;
                                             fontSize: '0.9rem'
                                         }}
                                     >
-                                        {level}
+                                        {option.label}
                                     </button>
                                 ))}
                             </div>
@@ -5055,4 +5177,4 @@ const { useState, useEffect, useRef } = React;
             );
         }
 
-        ReactDOM.render(<App />, document.getElementById('root'));
+        ReactDOM.render(<><App /><NotificationCenter /></>, document.getElementById('root'));
