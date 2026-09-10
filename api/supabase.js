@@ -168,6 +168,7 @@ module.exports = async (req, res) => {
           .maybeSingle();
         if (error) throw error;
         return res.status(200).json({
+          exists: Boolean(data),
           profile: normalizeProfile(data?.child_profile || DEFAULT_PROFILE),
           selectedInterests: normalizeInterests(data?.selected_interests),
           updatedAt: data?.updated_at || null

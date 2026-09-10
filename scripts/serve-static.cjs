@@ -22,7 +22,7 @@ function json(res, body) {
 
 function handleApi(req, res, url) {
   if (url.pathname === '/api/supabase' && url.searchParams.get('table') === 'ChildSettings') {
-    json(res, { profile: { birthDate: '', ageMonths: '', gender: '', booksPerDay: 2, emotionSensitivity: 'normal' }, selectedInterests: [] });
+    json(res, { exists: true, profile: { birthDate: '', ageMonths: '', gender: '', booksPerDay: 2, emotionSensitivity: 'normal' }, selectedInterests: [] });
   } else if (url.pathname === '/api/supabase') {
     json(res, url.searchParams.get('table') === 'Books' ? books : logs);
   } else if (url.pathname === '/api/aladin-search') {

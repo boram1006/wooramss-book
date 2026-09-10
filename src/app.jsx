@@ -282,6 +282,14 @@ const { useState, useEffect, useRef } = React;
                         if (!response.ok) throw new Error('server settings unavailable');
                         const data = await response.json();
                         if (cancelled) return;
+                        if (!data.exists) {
+                            await fetch('/api/supabase?table=ChildSettings', {
+                                method: 'PUT',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ profile: childProfile, selectedInterests })
+                            });
+                            return;
+                        }
                         if (data.profile) {
                             setChildProfile(data.profile);
                             localStorage.setItem('childProfile', JSON.stringify(data.profile));

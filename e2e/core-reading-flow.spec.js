@@ -26,7 +26,7 @@ test('책 추가 → 부모 가이드 생성 → 읽기 기록 저장', async ({
     const json = body => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(body) });
 
     if (url.pathname === '/api/supabase' && url.searchParams.get('table') === 'ChildSettings') {
-      return json({ profile: { birthDate: '', ageMonths: '', gender: '', booksPerDay: 2, emotionSensitivity: 'normal' }, selectedInterests: [] });
+      return json({ exists: true, profile: { birthDate: '', ageMonths: '', gender: '', booksPerDay: 2, emotionSensitivity: 'normal' }, selectedInterests: [] });
     }
     if (url.pathname === '/api/supabase') {
       return json(url.searchParams.get('table') === 'Books' ? books : logs);
