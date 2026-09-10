@@ -5,6 +5,13 @@ const {
   loadThemeOverrides
 } = require('../lib/theme-classification-store');
 const { fetchAllRows } = require('../lib/supabase-pagination');
+const {
+  DEFAULT_PROFILE,
+  normalizeProfile,
+  normalizeInterests
+} = require('../lib/child-settings');
+
+const SETTINGS_USER_KEY = 'default';
 
 // Supabase 클라이언트 초기화
 function getSupabaseClient() {
@@ -148,12 +155,46 @@ function convertFieldsToSupabase(fields, tableName) {
 
 // Supabase 데이터 가져오기 API 엔드포인트
 module.exports = async (req, res) => {
+  const { table } = req.query;
+
+  if (table === 'ChildSettings') {
+    if (!['GET', 'PUT'].includes(req.method)) return res.status(405).json({ error: 'Method not allowed' });
+    try {
+      const supabase = getSupabaseClient();
+      if (req.method === 'GET') {
+        const { data, error } = await supabase.from('child_settings')
+          .select('child_profile,selected_interests,updated_at')
+          .eq('user_key', SETTINGS_USER_KEY)
+          .maybeSingle();
+        if (error) throw error;
+        return res.status(200).json({
+          profile: normalizeProfile(data?.child_profile || DEFAULT_PROFILE),
+          selectedInterests: normalizeInterests(data?.selected_interests),
+          updatedAt: data?.updated_at || null
+        });
+      }
+
+      const profile = normalizeProfile(req.body?.profile);
+      const selectedInterests = normalizeInterests(req.body?.selectedInterests);
+      const updatedAt = new Date().toISOString();
+      const { error } = await supabase.from('child_settings').upsert({
+        user_key: SETTINGS_USER_KEY,
+        child_profile: profile,
+        selected_interests: selectedInterests,
+        updated_at: updatedAt
+      }, { onConflict: 'user_key' });
+      if (error) throw error;
+      return res.status(200).json({ success: true, profile, selectedInterests, updatedAt });
+    } catch (error) {
+      console.error('[child-settings]', error);
+      return res.status(500).json({ error: '아이 설정을 저장하지 못했습니다.' });
+    }
+  }
+
   if (req.method !== 'GET') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  const { table } = req.query;
-  
   if (!table) {
     return res.status(400).json({ error: 'Table name required' });
   }

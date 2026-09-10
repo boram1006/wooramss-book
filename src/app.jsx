@@ -278,7 +278,7 @@ const { useState, useEffect, useRef } = React;
                 let cancelled = false;
                 const loadSavedSettings = async () => {
                     try {
-                        const response = await fetch('/api/child-settings', { cache: 'no-store' });
+                        const response = await fetch('/api/supabase?table=ChildSettings', { cache: 'no-store' });
                         if (!response.ok) throw new Error('server settings unavailable');
                         const data = await response.json();
                         if (cancelled) return;
@@ -322,7 +322,7 @@ const { useState, useEffect, useRef } = React;
                 setChildProfile(normalizedProfile);
                 localStorage.setItem('childProfile', JSON.stringify(normalizedProfile));
                 localStorage.setItem('selectedInterests', JSON.stringify(interests));
-                const response = await fetch('/api/child-settings', {
+                const response = await fetch('/api/supabase?table=ChildSettings', {
                     method: 'PUT',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ profile: normalizedProfile, selectedInterests: interests })

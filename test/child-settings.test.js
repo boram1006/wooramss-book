@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { normalizeProfile, normalizeInterests } = require('../api/child-settings');
+const { normalizeProfile, normalizeInterests } = require('../lib/child-settings');
 
 test('아이 프로필 저장값을 허용 범위로 정규화한다', () => {
   assert.deepEqual(normalizeProfile({
