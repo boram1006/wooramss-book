@@ -10,6 +10,15 @@ const {
   inferThemes
 } = require('../lib/theme-taxonomy');
 
+test('기존 26개를 유지하면서 승인된 분류 5개를 추가한다', () => {
+  assert.equal(THEME_CATALOG.length, 31);
+  assert.ok(THEME_CATALOG.includes('의사소통'));
+  assert.ok(THEME_CATALOG.includes('책임·자기조절'));
+  assert.ok(THEME_CATALOG.includes('책·언어'));
+  assert.ok(THEME_CATALOG.includes('감각·기초 개념'));
+  assert.ok(THEME_CATALOG.includes('사회·경제·직업'));
+});
+
 test('동의어와 세부 대상을 추천용 표준 테마로 통합한다', () => {
   assert.equal(canonicalizeTheme('가족의 사랑'), '가족');
   assert.equal(canonicalizeTheme('친구와의 우정'), '친구·우정');
