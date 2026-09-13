@@ -4460,6 +4460,7 @@ const { useState, useEffect, useRef } = React;
             const [classificationError, setClassificationError] = useState('');
             const [classificationTotal, setClassificationTotal] = useState(0);
             const [classificationPage, setClassificationPage] = useState(1);
+            const [taxonomyResidualBooks, setTaxonomyResidualBooks] = useState([]);
             const classificationPageSize = 20;
             const directInterests = selectedInterests.filter(
                 item => !autoTopInterests.some(auto => auto.toLowerCase() === String(item).toLowerCase())
@@ -4515,6 +4516,7 @@ const { useState, useEffect, useRef } = React;
                     if (!response.ok) throw new Error(data.error || '미분류 표현을 불러오지 못했어요.');
                     setClassificationItems(data.items || []);
                     setClassificationGroups(data.groups || []);
+                    setTaxonomyResidualBooks(data.residualBooks || []);
                     setClassificationTotal(data.total || 0);
                     setClassificationPage(data.page || requestedPage);
                     setClassificationSelections(current => {
@@ -4804,6 +4806,43 @@ const { useState, useEffect, useRef } = React;
                             )}
                             {!classificationLoading && !classificationError && openClassifications.length === 0 && (
                                 <p className="classification-empty">지금 검토할 표현이 없어요.</p>
+                            )}
+
+                            {!classificationLoading && !classificationError && taxonomyResidualBooks.length > 0 && (
+                                <div className="taxonomy-residual-section">
+                                    <div className="classification-heading-row taxonomy-residual-heading">
+                                        <div>
+                                            <h4>책별 최종 확인</h4>
+                                            <p className="classification-description">
+                                                소개글이 없거나 책별 맥락이 필요한 항목이에요. 전역 표현 규칙으로 자동 연결하지 않았어요.
+                                            </p>
+                                        </div>
+                                        <span className="classification-count">{taxonomyResidualBooks.length}권</span>
+                                    </div>
+                                    <div className="classification-list">
+                                        {taxonomyResidualBooks.map(book => {
+                                            const additions = Object.entries(book.residual_additions || {})
+                                                .flatMap(([axis, targets]) => (targets || []).map(target => `${axis}: ${target}`));
+                                            return (
+                                                <div className="classification-item taxonomy-residual-item" key={book.book_id}>
+                                                    <div>
+                                                        <div className="classification-expression">{book.title}</div>
+                                                        <div className="classification-meta">
+                                                            {(book.residual_expressions || []).length > 0 && <>
+                                                                잔여 표현: {(book.residual_expressions || []).join(', ')}<br />
+                                                            </>}
+                                                            {additions.length > 0 && <>
+                                                                검토할 분류: {additions.join(', ')}<br />
+                                                            </>}
+                                                            {book.reason}
+                                                        </div>
+                                                    </div>
+                                                    <span className="classification-status">자료 확인 필요</span>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
                             )}
 
                             <div className="classification-list">

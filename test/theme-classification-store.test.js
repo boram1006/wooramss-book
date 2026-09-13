@@ -9,13 +9,19 @@ const {
 test('처리된 분류 행을 연결·제외 오버라이드로 만든다', () => {
   const overrides = buildThemeOverrides([
     { normalized_expression: '로봇과기계', status: 'mapped', mapped_theme: '과학·탐구' },
+    { normalized_expression: '책과말', status: 'mapped', mapped_theme: '책·언어', mapped_themes: ['책·언어', '의사소통'] },
     { normalized_expression: '보드북', status: 'excluded', mapped_theme: null },
+    { normalized_expression: '콜라주', status: 'resolved_v2', resolution_scope: 'global' },
+    { normalized_expression: '선물', status: 'resolved_v2', resolution_scope: 'book' },
     { normalized_expression: '바퀴친구', status: 'pending', mapped_theme: null }
   ]);
 
   assert.equal(overrides.get('로봇과기계'), '과학·탐구');
   assert.equal(overrides.has('보드북'), true);
   assert.equal(overrides.get('보드북'), null);
+  assert.deepEqual(overrides.get('책과말'), ['책·언어', '의사소통']);
+  assert.equal(overrides.get('콜라주'), null);
+  assert.equal(overrides.has('선물'), false);
   assert.equal(overrides.has('바퀴친구'), false);
 });
 

@@ -8,6 +8,7 @@ const {
 } = require('../lib/theme-taxonomy');
 const {
   loadOpenThemeClassifications,
+  loadOpenTaxonomyResiduals,
   loadThemeOverrides,
   recordUnclassifiedObservations,
   validateClassification
@@ -77,13 +78,17 @@ module.exports = async (req, res) => {
     const mode = String(req.query.mode || '');
 
     if (mode === 'classifications' && req.method === 'GET') {
-      const result = await loadOpenThemeClassifications(supabase, {
-        page: req.query.page,
-        pageSize: req.query.pageSize
-      });
+      const [result, residualBooks] = await Promise.all([
+        loadOpenThemeClassifications(supabase, {
+          page: req.query.page,
+          pageSize: req.query.pageSize
+        }),
+        loadOpenTaxonomyResiduals(supabase)
+      ]);
       return res.status(200).json({
         success: true,
         groups: THEME_GROUPS,
+        residualBooks,
         ...result
       });
     }
@@ -98,6 +103,11 @@ module.exports = async (req, res) => {
         .update({
           status,
           mapped_theme: mappedTheme,
+          mapped_themes: status === 'mapped' ? [mappedTheme] : [],
+          resolution_scope: status === 'mapped' || status === 'excluded' ? 'global' : null,
+          resolution_v2: status === 'mapped' || status === 'excluded'
+            ? { source: 'settings-manual', disposition: status, mappedThemes: mappedTheme ? [mappedTheme] : [] }
+            : null,
           resolved_at: status === 'mapped' || status === 'excluded' ? new Date().toISOString() : null
         })
         .eq('normalized_expression', normalizedExpression)
