@@ -5,7 +5,6 @@ const {
   loadThemeOverrides
 } = require('../lib/theme-classification-store');
 const { fetchAllRows } = require('../lib/supabase-pagination');
-const approvedTaxonomyV2 = require('./taxonomy-approved-links-v2.json');
 const {
   DEFAULT_PROFILE,
   normalizeProfile,
@@ -157,49 +156,6 @@ function convertFieldsToSupabase(fields, tableName) {
 // Supabase 데이터 가져오기 API 엔드포인트
 module.exports = async (req, res) => {
   const { table } = req.query;
-
-  if (table === 'taxonomy-v2-approved-import') {
-    if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
-    if (req.body?.approvalId !== 'taxonomy-v2-draft-2-20260913') {
-      return res.status(403).json({ error: 'Approval id mismatch' });
-    }
-    try {
-      const supabase = getSupabaseClient();
-      const chunkIndex = Number(req.body?.chunkIndex);
-      const chunkSize = 100;
-      const chunkCount = Math.ceil(approvedTaxonomyV2.links.length / chunkSize);
-      if (!Number.isInteger(chunkIndex) || chunkIndex < 0 || chunkIndex >= chunkCount) {
-        return res.status(400).json({ error: `chunkIndex must be between 0 and ${chunkCount - 1}` });
-      }
-      const { error: categoryError } = await supabase
-        .from('taxonomy_categories_v2')
-        .upsert(approvedTaxonomyV2.categories, { onConflict: 'axis,target' });
-      if (categoryError) throw categoryError;
-      const start = chunkIndex * chunkSize;
-      const group = approvedTaxonomyV2.links.slice(start, start + chunkSize);
-      const { error } = await supabase
-        .from('book_taxonomy_v2')
-        .upsert(group, { onConflict: 'book_id,axis,target' });
-      if (error) throw error;
-      const { count, error: countError } = await supabase
-        .from('book_taxonomy_v2')
-        .select('*', { count: 'exact', head: true })
-        .eq('taxonomy_version', '2.0-draft.2')
-        .eq('approval_source', 'human-approved-batch-review');
-      if (countError) throw countError;
-      return res.status(200).json({
-        success: true,
-        chunkIndex,
-        chunkCount,
-        chunkLinks: group.length,
-        categories: approvedTaxonomyV2.categories.length,
-        totalLinks: count,
-        complete: count === approvedTaxonomyV2.links.length
-      });
-    } catch (error) {
-      return res.status(500).json({ success: false, error: error.message });
-    }
-  }
 
   if (table === 'ChildSettings') {
     if (!['GET', 'PUT'].includes(req.method)) return res.status(405).json({ error: 'Method not allowed' });
