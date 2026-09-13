@@ -1,0 +1,41 @@
+{
+  "completedAt": "2026-09-14T06:08:09+09:00",
+  "taxonomyVersion": "2.0-draft.3",
+  "approval": "user-approved",
+  "legacyThemeStorage": {
+    "booksUpdated": 7,
+    "approvedLinksAdded": 8,
+    "verifiedBooks": 7,
+    "pendingWritesAfterVerification": 0
+  },
+  "structuredStorage": {
+    "approvedLinksAdded": 27,
+    "byAxisAdded": {
+      "subject": 5,
+      "interest": 3,
+      "context": 19
+    },
+    "totalLinksBefore": 1582,
+    "totalLinksAfter": 1609,
+    "byAxisAfter": {
+      "subject": 564,
+      "interest": 642,
+      "form": 202,
+      "context": 132,
+      "metadata": 69
+    }
+  },
+  "reviewOutcome": {
+    "reviewedBooks": 626,
+    "completedBooks": 619,
+    "residualBooks": 7,
+    "residualExpressionOccurrences": 6
+  },
+  "safeguards": {
+    "additiveOnly": true,
+    "existingValuesDeleted": 0,
+    "existingCategoriesRenamed": 0,
+    "backupCreated": true,
+    "rollbackCreated": true
+  }
+}

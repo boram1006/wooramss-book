@@ -1,0 +1,93 @@
+{
+  "generatedAt": "2026-09-13T21:08:09.022Z",
+  "mode": "preflight",
+  "taxonomyVersion": "2.0-draft.3",
+  "endpoint": "https://wooramss-book.vercel.app",
+  "summary": {
+    "approvedThemeLinks": 8,
+    "booksChecked": 7,
+    "pendingWrites": 0,
+    "alreadyApplied": 7,
+    "deletions": 0
+  },
+  "operations": [
+    {
+      "bookId": "59794941-9642-4101-8ecf-b79bc9a8c414",
+      "isbn": "9791160513691",
+      "title": "이 뼈를 모두 누가 찾았게?",
+      "additions": [
+        "사회·경제·직업"
+      ],
+      "beforeThemes": "고생물학자,뼈,화석,과학·탐구,사회·경제·직업",
+      "afterThemes": "고생물학자,뼈,화석,과학·탐구,사회·경제·직업",
+      "changed": false
+    },
+    {
+      "bookId": "57420612-5dcf-4ce2-94d2-07cd92ee2cb0",
+      "isbn": "9788911129607",
+      "title": "우리들의 특별한 축제",
+      "additions": [
+        "상상·판타지",
+        "문제해결"
+      ],
+      "beforeThemes": "용,축제,창의력,예술·창작,상상·판타지,문제해결",
+      "afterThemes": "용,축제,창의력,예술·창작,상상·판타지,문제해결",
+      "changed": false
+    },
+    {
+      "bookId": "1f093c66-7f07-48e4-a91e-51c0611f10a4",
+      "isbn": "9788901025766",
+      "title": "꿀꿀 돼지",
+      "additions": [
+        "책임·자기조절"
+      ],
+      "beforeThemes": "욕심과결과,반복구성,풍자와유머,책임·자기조절",
+      "afterThemes": "욕심과결과,반복구성,풍자와유머,책임·자기조절",
+      "changed": false
+    },
+    {
+      "bookId": "b22d9249-5a19-4dd5-840f-c0af4425b12b",
+      "isbn": "9788901114644",
+      "title": "이상한 나뭇잎",
+      "additions": [
+        "책임·자기조절"
+      ],
+      "beforeThemes": "욕심과 교훈,전래동화,도덕성,책임·자기조절",
+      "afterThemes": "욕심과 교훈,전래동화,도덕성,책임·자기조절",
+      "changed": false
+    },
+    {
+      "bookId": "49f0619a-9959-4acc-a40b-7487afd53731",
+      "isbn": "9788901125367",
+      "title": "우리 동네 한 바퀴",
+      "additions": [
+        "탈것·도시"
+      ],
+      "beforeThemes": "이웃,동네풍경,관찰,탈것·도시",
+      "afterThemes": "이웃,동네풍경,관찰,탈것·도시",
+      "changed": false
+    },
+    {
+      "bookId": "3b17c8a8-0eaf-447e-be54-bd6c4e14547a",
+      "isbn": "9788925574691",
+      "title": "몹시 큰 초대장",
+      "additions": [
+        "의사소통"
+      ],
+      "beforeThemes": "우정,소통,배려,의사소통",
+      "afterThemes": "우정,소통,배려,의사소통",
+      "changed": false
+    },
+    {
+      "bookId": "2ccc3431-e09b-4007-bdba-9dec40262805",
+      "isbn": "9788925578781",
+      "title": "나는 커서 어떤 일을 할까?",
+      "additions": [
+        "사회·경제·직업"
+      ],
+      "beforeThemes": "직업과역할,일의가치,호기심발견,사회·경제·직업",
+      "afterThemes": "직업과역할,일의가치,호기심발견,사회·경제·직업",
+      "changed": false
+    }
+  ]
+}
