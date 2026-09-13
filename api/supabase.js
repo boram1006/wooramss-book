@@ -5,6 +5,7 @@ const {
   loadThemeOverrides
 } = require('../lib/theme-classification-store');
 const { fetchAllRows } = require('../lib/supabase-pagination');
+const approvedTaxonomyV2 = require('./taxonomy-approved-links-v2.json');
 const {
   DEFAULT_PROFILE,
   normalizeProfile,
@@ -156,6 +157,36 @@ function convertFieldsToSupabase(fields, tableName) {
 // Supabase 데이터 가져오기 API 엔드포인트
 module.exports = async (req, res) => {
   const { table } = req.query;
+
+  if (table === 'taxonomy-v2-approved-import') {
+    if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+    if (req.body?.approvalId !== 'taxonomy-v2-draft-2-20260913') {
+      return res.status(403).json({ error: 'Approval id mismatch' });
+    }
+    try {
+      const supabase = getSupabaseClient();
+      const { error: categoryError } = await supabase
+        .from('taxonomy_categories_v2')
+        .upsert(approvedTaxonomyV2.categories, { onConflict: 'axis,target' });
+      if (categoryError) throw categoryError;
+      for (let offset = 0; offset < approvedTaxonomyV2.links.length; offset += 200) {
+        const { error } = await supabase
+          .from('book_taxonomy_v2')
+          .upsert(approvedTaxonomyV2.links.slice(offset, offset + 200), { onConflict: 'book_id,axis,target' });
+        if (error) throw error;
+      }
+      const { count, error: countError } = await supabase
+        .from('book_taxonomy_v2')
+        .select('*', { count: 'exact', head: true })
+        .eq('taxonomy_version', '2.0-draft.2')
+        .eq('approval_source', 'human-approved-batch-review');
+      if (countError) throw countError;
+      if (count !== approvedTaxonomyV2.links.length) throw new Error(`Verification count mismatch: ${count}`);
+      return res.status(200).json({ success: true, categories: approvedTaxonomyV2.categories.length, links: count });
+    } catch (error) {
+      return res.status(500).json({ success: false, error: error.message });
+    }
+  }
 
   if (table === 'ChildSettings') {
     if (!['GET', 'PUT'].includes(req.method)) return res.status(405).json({ error: 'Method not allowed' });
