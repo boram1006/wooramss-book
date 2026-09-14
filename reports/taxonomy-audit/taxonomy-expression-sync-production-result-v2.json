@@ -1,0 +1,25 @@
+{
+  "taxonomyVersion": "2.0-draft.3",
+  "executedAt": "2026-09-15T07:59:00+09:00",
+  "approvalId": "taxonomy-expression-sync-v2-20260914",
+  "backupTable": "public.taxonomy_expression_logs_backup_20260914",
+  "sourceCommit": "5b69611",
+  "deploymentCommit": "5e02590",
+  "result": {
+    "updatedExpressions": 1490,
+    "mapped": 1030,
+    "resolvedV2": 447,
+    "excluded": 7,
+    "deferred": 6,
+    "openExpressions": 6,
+    "residualBooks": 7
+  },
+  "verification": {
+    "endpoint": "/api/interest-candidates?mode=classifications&page=1&pageSize=20",
+    "httpStatus": 200,
+    "reportedTotal": 6,
+    "reportedResidualBooks": 7,
+    "openExpressionStatuses": ["deferred"]
+  },
+  "cleanup": "The one-time HTTP sync path and its deployment manifest were removed after successful verification."
+}

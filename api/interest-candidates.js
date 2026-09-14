@@ -14,7 +14,6 @@ const {
   validateClassification
 } = require('../lib/theme-classification-store');
 const { fetchAllRows } = require('../lib/supabase-pagination');
-const taxonomySyncManifest = require('./taxonomy-expression-resolutions-v2.json');
 
 function getSupabaseClient() {
   const url = process.env.SUPABASE_URL;
@@ -77,33 +76,6 @@ module.exports = async (req, res) => {
   try {
     const supabase = getSupabaseClient();
     const mode = String(req.query.mode || '');
-
-    if (mode === 'taxonomy-sync-v2' && req.method === 'POST') {
-      if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
-        return res.status(503).json({ success: false, error: 'Service role configuration is missing' });
-      }
-      if (req.body?.approvalId !== taxonomySyncManifest.approvalId) {
-        return res.status(403).json({ success: false, error: 'Approval id mismatch' });
-      }
-      const { data, error } = await supabase.rpc('apply_taxonomy_expression_resolutions_v2', {
-        p_items: taxonomySyncManifest.resolutions,
-        p_residuals: taxonomySyncManifest.residualBooks,
-        p_approval_id: taxonomySyncManifest.approvalId
-      });
-      if (error) throw error;
-      const { count: openCount, error: openError } = await supabase
-        .from('unclassified_theme_logs')
-        .select('*', { count: 'exact', head: true })
-        .in('status', ['pending', 'deferred']);
-      if (openError) throw openError;
-      if (openCount !== 6) throw new Error(`Open expression count mismatch: ${openCount}`);
-      return res.status(200).json({
-        success: true,
-        result: data,
-        openExpressions: openCount,
-        residualBooks: taxonomySyncManifest.residualBooks.length
-      });
-    }
 
     if (mode === 'classifications' && req.method === 'GET') {
       const [result, residualBooks] = await Promise.all([
