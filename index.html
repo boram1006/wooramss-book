@@ -313,17 +313,6 @@
             cursor: pointer;
             font-size: 1.1rem;
         }
-        .new-badge {
-            position: absolute;
-            top: 0.75rem;
-            right: 0.75rem;
-            background: #FF69B4;
-            color: white;
-            padding: 0.25rem 0.5rem;
-            border-radius: 12px;
-            font-size: 0.7rem;
-            font-weight: 600;
-        }
         .loading {
             text-align: center;
             padding: 3rem;
@@ -1191,11 +1180,6 @@
             opacity: 0.38;
         }
 
-        .new-badge {
-            background: var(--clay-pink);
-            color: white;
-        }
-
         .horizontal-scroll {
             gap: 16px !important;
             padding: 8px 2px 18px !important;
@@ -1236,6 +1220,33 @@
 
         .section button[style]:hover {
             border-color: var(--clay-action) !important;
+        }
+
+        .recommendation-dismiss-button {
+            width: 100%;
+            min-height: 40px;
+            margin-top: 12px;
+            padding: 9px 14px;
+            border: 1px solid var(--clay-line);
+            border-radius: 12px;
+            background: rgba(255, 255, 255, 0.72);
+            color: var(--clay-body);
+            font-size: 13px;
+            font-weight: 700;
+            cursor: pointer;
+            box-shadow: none;
+            transition: background 0.18s ease, border-color 0.18s ease, color 0.18s ease;
+        }
+
+        .recommendation-dismiss-button:hover {
+            border-color: var(--clay-action);
+            background: var(--clay-card);
+            color: var(--clay-ink);
+        }
+
+        .recommendation-dismiss-button:focus-visible {
+            outline: 3px solid rgba(255, 127, 80, 0.28);
+            outline-offset: 2px;
         }
 
         .horizontal-scroll::-webkit-scrollbar-track {

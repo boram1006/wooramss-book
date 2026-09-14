@@ -1470,22 +1470,12 @@ const { useState, useEffect, useRef } = React;
                                                         </div>
                                                     )}
                                                     <button
+                                                        className="recommendation-dismiss-button"
                                                         onClick={async (e) => {
                                                             e.stopPropagation();
                                                             if (await confirmAction('이 책을 추천 목록에서 빼드릴게요. 괜찮으세요?')) {
                                                                 skipDbBook(item.book.id);
                                                             }
-                                                        }}
-                                                        style={{
-                                                            marginTop: '0.75rem',
-                                                            width: '100%',
-                                                            padding: '0.4rem 0',
-                                                            background: 'transparent',
-                                                            border: '1px solid #ddd',
-                                                            borderRadius: '8px',
-                                                            color: '#aaa',
-                                                            fontSize: '0.78rem',
-                                                            cursor: 'pointer'
                                                         }}
                                                     >
                                                         안 볼래요
@@ -1581,46 +1571,6 @@ const { useState, useEffect, useRef } = React;
                                                         e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,0.05)';
                                                     }}
                                                 >
-                                                    <button
-                                                        aria-label={`${book.title} 추천에서 제외`}
-                                                        title="이 추천 숨기기"
-                                                        onClick={async (e) => {
-                                                            e.stopPropagation();
-                                                            if (await confirmAction('이 책을 신간 추천에서 제외할까요?')) {
-                                                                excludeAladinBook(book, 'user_excluded');
-                                                            }
-                                                        }}
-                                                        style={{
-                                                            position: 'absolute',
-                                                            top: '0.5rem',
-                                                            left: '0.5rem',
-                                                            background: '#FFE4E1',
-                                                            color: '#FF69B4',
-                                                            border: 'none',
-                                                            padding: '0.25rem 0.5rem',
-                                                            borderRadius: '20px',
-                                                            fontSize: '0.7rem',
-                                                            fontWeight: 'bold',
-                                                            cursor: 'pointer'
-                                                        }}
-                                                    >
-                                                        추천 제외
-                                                    </button>
-                                                    {' '}
-                                                    <span style={{
-                                                        position: 'absolute',
-                                                        top: '0.5rem',
-                                                        right: '0.5rem',
-                                                        background: '#98D8C8',
-                                                        color: 'white',
-                                                        padding: '0.25rem 0.5rem',
-                                                        borderRadius: '20px',
-                                                        fontSize: '0.7rem',
-                                                        fontWeight: 'bold'
-                                                    }}>
-                                                        NEW
-                                                    </span>
-                                                    
                                                     {book.cover && (
                                                         <div style={{
                                                             width: '100%',
@@ -1692,6 +1642,19 @@ const { useState, useEffect, useRef } = React;
                                                             {book.recommendationReason || '이 책의 추천 이유를 준비하고 있어요.'}
                                                         </div>
                                                     </div>
+                                                    <button
+                                                        className="recommendation-dismiss-button"
+                                                        aria-label={`${book.title} 추천에서 제외`}
+                                                        title="이 추천 숨기기"
+                                                        onClick={async (e) => {
+                                                            e.stopPropagation();
+                                                            if (await confirmAction('이 책을 추천 목록에서 빼드릴게요. 괜찮으세요?')) {
+                                                                excludeAladinBook(book, 'user_excluded');
+                                                            }
+                                                        }}
+                                                    >
+                                                        안 볼래요
+                                                    </button>
                                                 </div>
                                             </div>
                                         ))}
