@@ -700,42 +700,37 @@ const { useState, useEffect, useRef } = React;
                 }
             }
 
-            // 📖 관심 있는 책 추가 (Airtable에 저장)
+            // 📖 기존/신규 여부와 관계없이 관심책으로 한 번에 저장
             async function addInterestedBook(book) {
                 try {
-                    // Airtable에서 책 찾기 (ISBN 또는 제목으로)
-                    const booksData = await fetchAirtable(CONFIG.BOOKS_TABLE);
-                    const existingBook = booksData.find(b => 
-                        (b.fields['ISBN'] && book.isbn && b.fields['ISBN'] === book.isbn) ||
-                        (b.fields['제목'] && book.title && b.fields['제목'] === book.title)
-                    );
-                    
-                    if (existingBook) {
-                        // 이미 있는 책이면 관심 필드만 업데이트
-                        const response = await fetch('/api/update-book-field', {
-                            method: 'PATCH',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({
-                                recordId: existingBook.id,
-                                fields: {
-                                    '관심': true
-                                }
-                            })
-                        });
-                        
-                        const data = await response.json();
-                        if (data.success) {
-                            notify('관심책에 추가되었습니다!');
-                            await loadData();
-                        } else {
-                            notify('오류: ' + (data.error || '저장 실패'));
-                        }
-                    } else {
-                        // 책이 없으면 조용히 무시 (팝업 없음)
+                    const isbn = book.isbn13 || book.isbn;
+                    if (!isbn) {
+                        notify('ISBN이 없어 관심책으로 추가할 수 없습니다.');
+                        return false;
                     }
+
+                    const response = await fetch('/api/add-interested-book', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            isbn,
+                            childAgeMonths: effectiveAgeMonths,
+                            markInterested: true
+                        })
+                    });
+                    const data = await response.json();
+                    if (!data.success) {
+                        notify('오류: ' + (data.error || '저장 실패'));
+                        return false;
+                    }
+
+                    notify('관심책에 추가되었습니다!');
+                    await loadData();
+                    return true;
                 } catch (error) {
                     console.error('관심책 추가 오류:', error);
                     notify('관심책 추가 중 오류가 발생했습니다');
+                    return false;
                 }
             }
 
@@ -2113,41 +2108,9 @@ const { useState, useEffect, useRef } = React;
                                 }
                             }}
                             onAddToInterested={async () => {
-                                try {
-                                    // Airtable에서 책 찾기
-                                    const booksData = await fetchAirtable(CONFIG.BOOKS_TABLE);
-                                    const existingBook = booksData.find(b => 
-                                        (b.fields['ISBN'] && selectedAladinBook.isbn && b.fields['ISBN'] === selectedAladinBook.isbn) ||
-                                        (b.fields['제목'] && selectedAladinBook.title && b.fields['제목'] === selectedAladinBook.title)
-                                    );
-                                    
-                                    if (existingBook) {
-                                        // 이미 있는 책이면 관심 필드만 업데이트
-                                        const response = await fetch('/api/update-book-field', {
-                                            method: 'PATCH',
-                                            headers: { 'Content-Type': 'application/json' },
-                                            body: JSON.stringify({
-                                                recordId: existingBook.id,
-                                                fields: {
-                                                    '관심': true
-                                                }
-                                            })
-                                        });
-                                        
-                                        const data = await response.json();
-                                        if (data.success) {
-                                            notify('관심책에 추가되었습니다!');
-                                            await loadData();
-                                            setSelectedAladinBook(null);
-                                        } else {
-                                            notify('오류: ' + (data.error || '저장 실패'));
-                                        }
-                                    } else {
-                                        notify('먼저 "책 추가하기"를 눌러 책을 등록해주세요.');
-                                    }
-                                } catch (error) {
-                                    console.error('관심책 추가 오류:', error);
-                                    notify('관심책 추가 중 오류가 발생했습니다');
+                                const added = await addInterestedBook(selectedAladinBook);
+                                if (added) {
+                                    setSelectedAladinBook(null);
                                 }
                             }}
                         />

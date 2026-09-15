@@ -75,7 +75,7 @@ async function getBookFromAladin(isbn) {
 }
 
 // Books 테이블에 책 추가
-async function addBookToSupabase(bookInfo, aiGuide) {
+async function addBookToSupabase(bookInfo, aiGuide, interested = false) {
   const supabase = getSupabaseClient();
   
   const bookData = {
@@ -90,7 +90,7 @@ async function addBookToSupabase(bookInfo, aiGuide) {
     age_range: aiGuide.ageRange || '',
     parent_guide: aiGuide.parentGuide || '',
     activities: aiGuide.activities || '',
-    interested: false  // 기본값은 false (체크 해제)
+    interested
   };
 
   const { data, error } = await supabase
@@ -123,22 +123,17 @@ async function addBookToSupabase(bookInfo, aiGuide) {
   };
 }
 
-// ReadingLog에 관심 있는 책으로 추가
-async function addToReadingLog(bookId) {
+async function markBookInterested(bookId) {
   const supabase = getSupabaseClient();
-  
-  const logData = {
-    book_id: bookId
-  };
-
   const { data, error } = await supabase
-    .from('reading_logs')
-    .insert(logData)
+    .from('books')
+    .update({ interested: true })
+    .eq('id', bookId)
     .select()
     .single();
 
   if (error) {
-    throw new Error(`Supabase insert error: ${error.message}`);
+    throw new Error(`Supabase interest update error: ${error.message}`);
   }
 
   return data;
@@ -158,7 +153,7 @@ module.exports = async (req, res) => {
   }
   
   try {
-    const { isbn, childAgeMonths } = req.body;
+    const { isbn, childAgeMonths, markInterested = false } = req.body;
     
     if (!isbn) {
       return res.status(400).json({ error: 'ISBN이 필요합니다' });
@@ -171,6 +166,9 @@ module.exports = async (req, res) => {
     if (existingBook) {
       // 이미 있는 책
       bookId = existingBook.id;
+      if (markInterested && existingBook.fields['관심'] !== true) {
+        await markBookInterested(bookId);
+      }
     } else {
       // 없는 책 - 새로 추가
       console.log('📚 알라딘에서 책 정보 가져오는 중...');
@@ -186,17 +184,16 @@ module.exports = async (req, res) => {
       }
       
       console.log('💾 Supabase에 저장 중...');
-      const newBook = await addBookToSupabase(bookInfo, aiGuide);
+      const newBook = await addBookToSupabase(bookInfo, aiGuide, markInterested === true);
       bookId = newBook.id;
     }
-    
-    // 2. 관심 필드는 기본값 false로 유지 (업데이트하지 않음)
-    
+
     res.status(200).json({
       success: true,
-      message: '책이 추가되었습니다',
+      message: markInterested ? '관심책에 추가되었습니다' : '책이 추가되었습니다',
       bookId: bookId,
-      isNew: !existingBook
+      isNew: !existingBook,
+      interested: markInterested === true || existingBook?.fields?.['관심'] === true
     });
     
   } catch (error) {
