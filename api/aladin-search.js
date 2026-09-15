@@ -2,6 +2,7 @@
 // 알라딘 책 검색
 
 const ExcelJS = require('exceljs');
+const childbookSnapshot = require('../data/childbook-recommendations.json');
 
 const ALADIN_API_KEY = process.env.ALADIN_API_KEY || 'ttbcasey862231001';
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
@@ -219,6 +220,28 @@ async function fetchChildbookRecommendations(maxAge = 7) {
   return { source: 'childbook', sourceUrl: detailUrl, maxAge, books };
 }
 
+async function fetchChildbookSnapshot(maxAge = 7) {
+  const found = childbookSnapshot.books.filter(book => {
+    const age = recommendedAge(book.ageLabel);
+    return age != null && age <= maxAge;
+  });
+  const books = await mapWithConcurrency(found, 5, async sourceBook => {
+    try {
+      return { ...sourceBook, ...(await lookupAladinByIsbn(sourceBook.isbn) || {}) };
+    } catch (error) {
+      return sourceBook;
+    }
+  });
+  return {
+    source: 'childbook',
+    sourceUrl: childbookSnapshot.sourceUrl,
+    sourceYear: childbookSnapshot.year,
+    snapshot: true,
+    maxAge,
+    books
+  };
+}
+
 async function recognizeBookSpines(req, res) {
   if (!OPENAI_API_KEY) return res.status(500).json({ error: '이미지 인식 API 설정이 필요합니다.' });
 
@@ -322,7 +345,13 @@ module.exports = async (req, res) => {
 
     if (source === 'childbook') {
       const resolvedMaxAge = Math.max(0, Math.min(12, Number(maxAge) || 7));
-      const result = await fetchChildbookRecommendations(resolvedMaxAge);
+      let result;
+      try {
+        result = await fetchChildbookRecommendations(resolvedMaxAge);
+      } catch (error) {
+        console.warn('어린이도서연구회 실시간 목록 대신 저장된 최신 목록 사용:', error.message);
+        result = await fetchChildbookSnapshot(resolvedMaxAge);
+      }
       res.setHeader('Cache-Control', 'public, s-maxage=21600, stale-while-revalidate=86400');
       return res.status(200).json({ success: true, ...result, total: result.books.length });
     }
