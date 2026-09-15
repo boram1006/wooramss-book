@@ -1,6 +1,8 @@
 // Vercel Serverless Function
 // 알라딘 책 검색
 
+const ExcelJS = require('exceljs');
+
 const ALADIN_API_KEY = process.env.ALADIN_API_KEY || 'ttbcasey862231001';
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 
@@ -44,6 +46,177 @@ async function searchAladinByTitle(title, maxResults = 5) {
   if (!response.ok) return [];
   const data = await response.json();
   return (data.item || []).map(convertAladinBook).filter(book => book.isbn && book.title);
+}
+
+async function lookupAladinByIsbn(isbn) {
+  const url = `https://www.aladin.co.kr/ttb/api/ItemLookUp.aspx?ttbkey=${ALADIN_API_KEY}&itemIdType=ISBN&ItemId=${encodeURIComponent(isbn)}&output=js&Version=20131101&Cover=Big`;
+  const response = await fetch(url);
+  if (!response.ok) return null;
+  const data = await response.json();
+  return data.item?.[0] ? convertAladinBook(data.item[0]) : null;
+}
+
+async function mapWithConcurrency(items, concurrency, mapper) {
+  const results = new Array(items.length);
+  let cursor = 0;
+  async function worker() {
+    while (cursor < items.length) {
+      const index = cursor++;
+      results[index] = await mapper(items[index], index);
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(concurrency, items.length) }, worker));
+  return results;
+}
+
+function decodeHtml(value) {
+  return String(value || '')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+async function fetchNlcyRecommendations() {
+  const sourceUrl = 'https://www.nlcy.go.kr/NLCY/contents/C10600000000.do?schBdcode=_nlcy_normal0801';
+  const response = await fetch(sourceUrl, {
+    headers: { 'User-Agent': 'Mozilla/5.0 (compatible; DoranDoranBook/1.0)' }
+  });
+  if (!response.ok) throw new Error('국립어린이청소년도서관 목록을 불러오지 못했습니다.');
+  const html = await response.text();
+  const itemPattern = /<p\s+class="tit">\s*([\s\S]*?)\s*<\/p>[\s\S]*?<button\s+class="btn_view"[^>]*onclick="[^"]*?fnDetailSearch\(\s*'[^']*'\s*,\s*'[^']*'\s*,\s*'[^']*'\s*,\s*'([0-9Xx]{10,13})'/g;
+  const found = [];
+  const seen = new Set();
+  let match;
+  while ((match = itemPattern.exec(html)) && found.length < 30) {
+    const title = decodeHtml(match[1].replace(/<[^>]+>/g, ''));
+    const isbn = match[2].toUpperCase();
+    if (!title || seen.has(isbn)) continue;
+    seen.add(isbn);
+    found.push({ title, isbn });
+  }
+  if (!found.length) throw new Error('추천 목록 형식이 변경되어 책을 읽지 못했습니다.');
+
+  const books = await mapWithConcurrency(found, 5, async sourceBook => {
+    try {
+      return await lookupAladinByIsbn(sourceBook.isbn) || sourceBook;
+    } catch (error) {
+      return sourceBook;
+    }
+  });
+  return { source: 'nlcy', sourceUrl, books };
+}
+
+function plainCellValue(cell) {
+  const value = cell?.value;
+  if (value == null) return '';
+  if (typeof value === 'object') {
+    if (Array.isArray(value.richText)) return value.richText.map(part => part.text || '').join('');
+    if (value.text != null) return String(value.text);
+    if (value.result != null) return String(value.result);
+  }
+  return String(value);
+}
+
+function normalizeHeader(value) {
+  return String(value || '').replace(/[\s·/._-]/g, '').toLowerCase();
+}
+
+function firstValidIsbn(value) {
+  const candidates = String(value || '').toUpperCase().match(/[0-9X][0-9X\s-]{8,20}[0-9X]/g) || [];
+  for (const candidate of candidates) {
+    const normalized = candidate.replace(/[^0-9X]/g, '');
+    if (normalized.length === 10 || normalized.length === 13) return normalized;
+  }
+  return '';
+}
+
+function recommendedAge(value) {
+  const match = String(value || '').match(/(\d{1,2})\s*세/);
+  return match ? Number(match[1]) : null;
+}
+
+async function fetchChildbookRecommendations(maxAge = 7) {
+  const listUrl = 'https://www.childbook.org/news/notice_list.html?b_class=1';
+  const requestOptions = { headers: { 'User-Agent': 'Mozilla/5.0 (compatible; DoranDoranBook/1.0)' } };
+  const listResponse = await fetch(listUrl, requestOptions);
+  if (!listResponse.ok) throw new Error('어린이도서연구회 공지 목록을 불러오지 못했습니다.');
+  const listHtml = await listResponse.text();
+
+  const anchors = [...listHtml.matchAll(/<a\b[^>]*href=["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi)];
+  const selectedNotice = anchors.find(([, href, label]) => {
+    const title = decodeHtml(label.replace(/<[^>]+>/g, ''));
+    return href.includes('mode=VIEW_FORM') && title.includes('어린이도서연구회가 뽑은') && title.includes('어린이');
+  });
+  if (!selectedNotice) throw new Error('최신 어린이도서연구회 선정 목록을 찾지 못했습니다.');
+
+  const detailUrl = new URL(decodeHtml(selectedNotice[1]), listUrl).toString();
+  const detailResponse = await fetch(detailUrl, requestOptions);
+  if (!detailResponse.ok) throw new Error('어린이도서연구회 선정 목록 상세를 불러오지 못했습니다.');
+  const detailHtml = await detailResponse.text();
+  const downloadAnchors = [...detailHtml.matchAll(/<a\b[^>]*href=["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi)];
+  const spreadsheetLink = downloadAnchors.find(([, href, label]) => {
+    const combined = `${decodeHtml(href)} ${decodeHtml(label.replace(/<[^>]+>/g, ''))}`.toLowerCase();
+    return combined.includes('download.php') && combined.includes('.xlsx');
+  });
+  if (!spreadsheetLink) throw new Error('최신 선정 목록의 엑셀 파일을 찾지 못했습니다.');
+
+  const spreadsheetUrl = new URL(decodeHtml(spreadsheetLink[1]), detailUrl).toString();
+  const spreadsheetResponse = await fetch(spreadsheetUrl, requestOptions);
+  if (!spreadsheetResponse.ok) throw new Error('어린이도서연구회 선정 목록 파일을 내려받지 못했습니다.');
+  const workbook = new ExcelJS.Workbook();
+  await workbook.xlsx.load(Buffer.from(await spreadsheetResponse.arrayBuffer()));
+
+  const found = [];
+  const seen = new Set();
+  workbook.eachSheet(sheet => {
+    let headerRowNumber = 0;
+    let columns = {};
+    for (let rowNumber = 1; rowNumber <= Math.min(5, sheet.rowCount); rowNumber += 1) {
+      const row = sheet.getRow(rowNumber);
+      const candidateColumns = {};
+      row.eachCell((cell, columnNumber) => {
+        candidateColumns[normalizeHeader(plainCellValue(cell))] = columnNumber;
+      });
+      if (candidateColumns.isbn && candidateColumns['책이름']) {
+        headerRowNumber = rowNumber;
+        columns = candidateColumns;
+        break;
+      }
+    }
+    if (!headerRowNumber || !columns['연령']) return;
+
+    for (let rowNumber = headerRowNumber + 1; rowNumber <= sheet.rowCount; rowNumber += 1) {
+      const row = sheet.getRow(rowNumber);
+      const ageLabel = plainCellValue(row.getCell(columns['연령']));
+      const age = recommendedAge(ageLabel);
+      if (age == null || age > maxAge) continue;
+      const isbn = firstValidIsbn(plainCellValue(row.getCell(columns.isbn)));
+      const title = plainCellValue(row.getCell(columns['책이름'])).trim();
+      if (!isbn || !title || seen.has(isbn)) continue;
+      seen.add(isbn);
+      found.push({
+        isbn,
+        title,
+        author: columns['글쓴이'] ? plainCellValue(row.getCell(columns['글쓴이'])).trim() : '',
+        publisher: columns['출판사'] ? plainCellValue(row.getCell(columns['출판사'])).trim() : '',
+        ageLabel
+      });
+    }
+  });
+  if (!found.length) throw new Error('현재 연령에 맞는 선정 도서를 찾지 못했습니다.');
+
+  const books = await mapWithConcurrency(found, 5, async sourceBook => {
+    try {
+      return { ...sourceBook, ...(await lookupAladinByIsbn(sourceBook.isbn) || {}) };
+    } catch (error) {
+      return sourceBook;
+    }
+  });
+  return { source: 'childbook', sourceUrl: detailUrl, maxAge, books };
 }
 
 async function recognizeBookSpines(req, res) {
@@ -139,7 +312,20 @@ module.exports = async (req, res) => {
   if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
   
   try {
-    const { query, isbn } = req.query;
+    const { query, isbn, source, maxAge } = req.query;
+
+    if (source === 'nlcy') {
+      const result = await fetchNlcyRecommendations();
+      res.setHeader('Cache-Control', 'public, s-maxage=21600, stale-while-revalidate=86400');
+      return res.status(200).json({ success: true, ...result, total: result.books.length });
+    }
+
+    if (source === 'childbook') {
+      const resolvedMaxAge = Math.max(0, Math.min(12, Number(maxAge) || 7));
+      const result = await fetchChildbookRecommendations(resolvedMaxAge);
+      res.setHeader('Cache-Control', 'public, s-maxage=21600, stale-while-revalidate=86400');
+      return res.status(200).json({ success: true, ...result, total: result.books.length });
+    }
     
     if (!query) {
       return res.status(400).json({ error: '검색어를 입력해주세요' });

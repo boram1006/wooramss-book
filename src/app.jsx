@@ -1781,6 +1781,7 @@ const { useState, useEffect, useRef } = React;
                         filterType === 'candidates' ? (
                             <CandidateBooksView
                                 books={candidateBooks}
+                                childAgeMonths={effectiveAgeMonths}
                                 onSelectBook={selectBook}
                                 onAdd={() => setShowSearchModal(true)}
                                 onDataUpdate={loadData}
@@ -3520,19 +3521,144 @@ const { useState, useEffect, useRef } = React;
         ];
 
         const RECOMMENDATION_LISTS = [
-            { name: '어린이도서연구회', detail: '연간 추천도서', audience: 'wooram', cadenceDays: 365, url: 'https://www.childbook.org/news/notice_list.html?b_class=1' },
-            { name: '국립어린이청소년도서관', detail: '사서추천도서 · 격월', audience: 'wooram', cadenceDays: 60, url: 'https://www.nlcy.go.kr/NLCY/contents/C10600000000.do?schBdcode=_nlcy_normal0803' },
-            { name: '북스타트', detail: '영유아 단계별 선정도서', audience: 'wooram', cadenceDays: 365, url: 'https://bookstart.org/' },
-            { name: '칼데콧 메달', detail: '매년 1월 발표', audience: 'wooram', cadenceDays: 365, url: 'https://www.ala.org/alsc/awardsgrants/bookmedia/caldecott' },
-            { name: '볼로냐 라가치상', detail: '국제 아동도서상', audience: 'wooram', cadenceDays: 365, url: 'https://www.bolognachildrensbookfair.com/en/awards/bolognaragazzi-awards/8382.html' },
-            { name: '화이트 레이븐스', detail: '세계 주목할 아동서 · 연간', audience: 'wooram', cadenceDays: 365, url: 'https://www.ijb.de/en/home/the-white-ravens' },
-            { name: 'IBBY 아너리스트', detail: '작가·그림·번역 · 격년', audience: 'wooram', cadenceDays: 730, url: 'https://www.ibby.org/awards-activities/awards/ibby-honour-list/' },
-            { name: 'NYPL Best Books', detail: '어린이 신간 · 연간', audience: 'wooram', cadenceDays: 365, url: 'https://www.nypl.org/books-music-movies/about-annual-lists' },
-            { name: '세종도서', detail: '교양 · 육아/교육 분야', audience: 'boram', cadenceDays: 365, url: 'https://bookapply.kpipa.or.kr/front/intro/information.do' },
-            { name: '행복한아침독서', detail: '분기별 추천도서', audience: 'wooram', cadenceDays: 90, url: 'https://www.aladin.co.kr/shop/wbrowse.aspx?cid=71292' }
+            { key: 'childbook', name: '어린이도서연구회', detail: '연간 추천도서', audience: 'wooram', cadenceDays: 365, automatic: true, url: 'https://www.childbook.org/news/notice_list.html?b_class=1' },
+            { key: 'nlcy', name: '국립어린이청소년도서관', detail: '유아 사서추천도서 · 격월', audience: 'wooram', cadenceDays: 60, automatic: true, url: 'https://www.nlcy.go.kr/NLCY/contents/C10600000000.do?schBdcode=_nlcy_normal0801' }
         ];
 
-        function CandidateBooksView({ books, onSelectBook, onAdd, onDataUpdate }) {
+        function RecommendationSourcesView({ books, childAgeMonths, onBack, onDataUpdate }) {
+            const [loadingSource, setLoadingSource] = useState(null);
+            const [sourceResult, setSourceResult] = useState(null);
+            const [selectedIsbns, setSelectedIsbns] = useState([]);
+            const [adding, setAdding] = useState(false);
+            const [checkedLists, setCheckedLists] = useState(() => {
+                try { return JSON.parse(localStorage.getItem('recommendationListChecks') || '{}'); }
+                catch (error) { return {}; }
+            });
+
+            const knownIsbns = new Set(books.map(book => String(book.fields['ISBN'] || '').replace(/[^0-9X]/gi, '').toUpperCase()).filter(Boolean));
+            const isListDue = source => {
+                const lastChecked = checkedLists[source.name];
+                return !lastChecked || Date.now() - new Date(lastChecked).getTime() >= source.cadenceDays * 86400000;
+            };
+            const markListChecked = source => {
+                const next = { ...checkedLists, [source.name]: new Date().toISOString() };
+                setCheckedLists(next);
+                localStorage.setItem('recommendationListChecks', JSON.stringify(next));
+            };
+
+            const fetchSource = async source => {
+                setLoadingSource(source.key);
+                setSourceResult(null);
+                setSelectedIsbns([]);
+                try {
+                    const ageYears = Math.max(5, Math.ceil((Number(childAgeMonths) || 48) / 12) + 1);
+                    const response = await fetch(`/api/aladin-search?source=${encodeURIComponent(source.key)}&maxAge=${ageYears}`);
+                    const data = await response.json();
+                    if (!response.ok || !data.success) throw new Error(data.error || '목록을 불러오지 못했습니다.');
+                    const items = (data.books || []).map(book => ({
+                        ...book,
+                        normalizedIsbn: String(book.isbn || '').replace(/[^0-9X]/gi, '').toUpperCase(),
+                        alreadySaved: knownIsbns.has(String(book.isbn || '').replace(/[^0-9X]/gi, '').toUpperCase())
+                    }));
+                    setSourceResult({ source, items });
+                    setSelectedIsbns(items.filter(item => !item.alreadySaved).map(item => item.normalizedIsbn));
+                    markListChecked(source);
+                } catch (error) {
+                    console.error('추천 목록 가져오기 오류:', error);
+                    notify(error.message || '추천 목록을 불러오지 못했습니다.');
+                } finally {
+                    setLoadingSource(null);
+                }
+            };
+
+            const addSelectedBooks = async () => {
+                const targets = (sourceResult?.items || []).filter(item => selectedIsbns.includes(item.normalizedIsbn) && !item.alreadySaved);
+                if (!targets.length) return notify('추가할 책을 선택해주세요.');
+                setAdding(true);
+                try {
+                    const results = [];
+                    for (let index = 0; index < targets.length; index += 5) {
+                        const batch = targets.slice(index, index + 5);
+                        results.push(...await Promise.all(batch.map(async book => {
+                            const response = await fetch('/api/add-interested-book', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ isbn: book.isbn, childAgeMonths, candidateStatus: 'review', audience: 'wooram' })
+                            });
+                            return response.ok;
+                        })));
+                    }
+                    const addedCount = results.filter(Boolean).length;
+                    if (!addedCount) throw new Error('선택한 책을 추가하지 못했습니다.');
+                    notify(`${addedCount}권을 검토할 책에 추가했습니다.`);
+                    await onDataUpdate();
+                    setSourceResult(current => current ? {
+                        ...current,
+                        items: current.items.map(item => selectedIsbns.includes(item.normalizedIsbn) ? { ...item, alreadySaved: true } : item)
+                    } : current);
+                    setSelectedIsbns([]);
+                } catch (error) {
+                    console.error('추천 책 일괄 추가 오류:', error);
+                    notify(error.message || '책을 추가하지 못했습니다.');
+                } finally {
+                    setAdding(false);
+                }
+            };
+
+            const toggleBook = isbn => setSelectedIsbns(current => current.includes(isbn) ? current.filter(value => value !== isbn) : [...current, isbn]);
+
+            return (
+                <div className="catalog-view recommendation-sources-view">
+                    <div className="view-heading recommendation-view-heading">
+                        <span className="view-eyebrow">RECOMMENDATION RADAR</span>
+                        <h2>추천 목록 확인</h2>
+                        <p>국내에서 구할 수 있는 연령별 추천 책을 확인하고, 새 책만 골라 후보함으로 가져와요.</p>
+                    </div>
+                    <button className="clay-button clay-button-secondary recommendation-back" onClick={onBack}>← 책 후보함으로</button>
+
+                    <div className="recommendation-list-grid recommendation-source-cards">
+                        {RECOMMENDATION_LISTS.map(source => (
+                            <article key={source.name} className="recommendation-source-card">
+                                <div>
+                                    <strong>{source.name} {isListDue(source) && <em>확인 필요</em>}</strong>
+                                    <span>{source.detail} · {source.audience === 'wooram' ? '우람이 책' : '보람이 책'}</span>
+                                    {checkedLists[source.name] && <small>마지막 확인 {new Date(checkedLists[source.name]).toLocaleDateString('ko-KR')}</small>}
+                                </div>
+                                {source.automatic ? (
+                                    <button className="clay-button clay-button-primary" disabled={loadingSource === source.key} onClick={() => fetchSource(source)}>
+                                        {loadingSource === source.key ? '불러오는 중...' : '새 목록 불러오기'}
+                                    </button>
+                                ) : (
+                                    <a href={source.url} target="_blank" rel="noreferrer" className="clay-button clay-button-secondary" onClick={() => markListChecked(source)}>원문 보기</a>
+                                )}
+                            </article>
+                        ))}
+                    </div>
+
+                    {sourceResult && (
+                        <section className="source-import-result">
+                            <div className="source-import-heading">
+                                <div><h3>{sourceResult.source.name}</h3><p>현재 DB와 대조했습니다. 이미 저장된 책은 다시 추가되지 않습니다.</p></div>
+                                <button className="clay-button clay-button-primary" disabled={adding || !selectedIsbns.length} onClick={addSelectedBooks}>
+                                    {adding ? '추가 중...' : `선택 ${selectedIsbns.length}권 검토함에 추가`}
+                                </button>
+                            </div>
+                            <div className="source-book-grid">
+                                {sourceResult.items.map(book => (
+                                    <label key={book.normalizedIsbn} className={`source-book-card ${book.alreadySaved ? 'is-saved' : ''}`}>
+                                        <input type="checkbox" disabled={book.alreadySaved} checked={!book.alreadySaved && selectedIsbns.includes(book.normalizedIsbn)} onChange={() => toggleBook(book.normalizedIsbn)} />
+                                        {book.cover ? <img src={book.cover} alt="" /> : <span className="source-book-cover-empty">표지 없음</span>}
+                                        <span><strong>{book.title}</strong><small>{book.author || ''}{book.publisher ? ` · ${book.publisher}` : ''}</small><em>{book.alreadySaved ? '이미 저장됨' : '새 책'}</em></span>
+                                    </label>
+                                ))}
+                            </div>
+                        </section>
+                    )}
+                </div>
+            );
+        }
+
+        function CandidateBooksView({ books, childAgeMonths, onSelectBook, onAdd, onDataUpdate }) {
             const [status, setStatus] = useState(() =>
                 books.some(book => book.fields['후보상태'] === 'review') ? 'review' :
                 books.some(book => book.fields['후보상태'] === 'interested') ? 'interested' : 'review'
@@ -3540,12 +3666,8 @@ const { useState, useEffect, useRef } = React;
             const [audience, setAudience] = useState('all');
             const [searchTerm, setSearchTerm] = useState('');
             const [selectedIds, setSelectedIds] = useState([]);
-            const [showLists, setShowLists] = useState(false);
+            const [viewMode, setViewMode] = useState('candidates');
             const [savingId, setSavingId] = useState(null);
-            const [checkedLists, setCheckedLists] = useState(() => {
-                try { return JSON.parse(localStorage.getItem('recommendationListChecks') || '{}'); }
-                catch (error) { return {}; }
-            });
 
             const candidateBooks = books.filter(book => Boolean(book.fields['후보상태']));
             const statusCounts = Object.fromEntries(CANDIDATE_STATUS_OPTIONS.map(option => [
@@ -3618,17 +3740,9 @@ const { useState, useEffect, useRef } = React;
                 }
             };
 
-            const markListChecked = (source) => {
-                const next = { ...checkedLists, [source.name]: new Date().toISOString() };
-                setCheckedLists(next);
-                localStorage.setItem('recommendationListChecks', JSON.stringify(next));
-            };
-
-            const isListDue = (source) => {
-                const lastChecked = checkedLists[source.name];
-                if (!lastChecked) return true;
-                return Date.now() - new Date(lastChecked).getTime() >= source.cadenceDays * 24 * 60 * 60 * 1000;
-            };
+            if (viewMode === 'sources') {
+                return <RecommendationSourcesView books={books} childAgeMonths={childAgeMonths} onBack={() => setViewMode('candidates')} onDataUpdate={onDataUpdate} />;
+            }
 
             return (
                 <div className="catalog-view candidate-view">
@@ -3640,28 +3754,10 @@ const { useState, useEffect, useRef } = React;
 
                     <div className="candidate-top-actions">
                         <button className="clay-button clay-button-primary" onClick={onAdd}><AppIcon name="plus" size={18} /> 후보 추가</button>
-                        <button className="clay-button clay-button-secondary" onClick={() => setShowLists(value => !value)}>
+                        <button className="clay-button clay-button-secondary" onClick={() => setViewMode('sources')}>
                             <AppIcon name="sparkle" size={18} /> 추천 목록 확인
                         </button>
                     </div>
-
-                    {showLists && (
-                        <div className="recommendation-list-panel">
-                            <div>
-                                <h3>놓치지 말고 확인할 추천 목록</h3>
-                                <p>책마다 출처를 저장하지 않고, 발표처 링크만 모았습니다.</p>
-                            </div>
-                            <div className="recommendation-list-grid">
-                                {RECOMMENDATION_LISTS.map(source => (
-                                    <a key={source.name} href={source.url} target="_blank" rel="noreferrer" className="recommendation-source-link" onClick={() => markListChecked(source)}>
-                                        <strong>{source.name} {isListDue(source) && <em>확인 필요</em>}</strong>
-                                        <span>{source.detail} · {source.audience === 'wooram' ? '우람이 책' : '보람이 책'}</span>
-                                        {checkedLists[source.name] && <small>마지막 확인 {new Date(checkedLists[source.name]).toLocaleDateString('ko-KR')}</small>}
-                                    </a>
-                                ))}
-                            </div>
-                        </div>
-                    )}
 
                     <div className="candidate-status-tabs" role="tablist" aria-label="후보 상태">
                         {CANDIDATE_STATUS_OPTIONS.map(option => (
