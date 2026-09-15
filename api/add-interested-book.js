@@ -55,7 +55,11 @@ async function findBookByISBN(isbn) {
       '연령': data.age_range,
       '부모_읽기_가이드': data.parent_guide,
       '연계놀이': data.activities,
-      '관심': data.interested
+      '관심': data.interested,
+      '대상': data.audience || 'wooram',
+      '후보상태': data.candidate_status || (data.interested ? 'interested' : ''),
+      '후보메모': data.candidate_note || '',
+      '다시볼날짜': data.candidate_review_at || ''
     }
   };
 }
@@ -75,7 +79,7 @@ async function getBookFromAladin(isbn) {
 }
 
 // Books 테이블에 책 추가
-async function addBookToSupabase(bookInfo, aiGuide, interested = false) {
+async function addBookToSupabase(bookInfo, aiGuide, candidate = {}) {
   const supabase = getSupabaseClient();
   
   const bookData = {
@@ -90,7 +94,12 @@ async function addBookToSupabase(bookInfo, aiGuide, interested = false) {
     age_range: aiGuide.ageRange || '',
     parent_guide: aiGuide.parentGuide || '',
     activities: aiGuide.activities || '',
-    interested
+    interested: candidate.status === 'interested' || candidate.status === 'purchase',
+    audience: candidate.audience || 'wooram',
+    candidate_status: candidate.status || null,
+    candidate_note: candidate.note || null,
+    candidate_review_at: candidate.reviewAt || null,
+    candidate_updated_at: candidate.status ? new Date().toISOString() : null
   };
 
   const { data, error } = await supabase
@@ -118,16 +127,27 @@ async function addBookToSupabase(bookInfo, aiGuide, interested = false) {
       '연령': data.age_range,
       '부모_읽기_가이드': data.parent_guide,
       '연계놀이': data.activities,
-      '관심': data.interested
+      '관심': data.interested,
+      '대상': data.audience || 'wooram',
+      '후보상태': data.candidate_status || '',
+      '후보메모': data.candidate_note || '',
+      '다시볼날짜': data.candidate_review_at || ''
     }
   };
 }
 
-async function markBookInterested(bookId) {
+async function updateBookCandidate(bookId, candidate) {
   const supabase = getSupabaseClient();
   const { data, error } = await supabase
     .from('books')
-    .update({ interested: true })
+    .update({
+      interested: candidate.status === 'interested' || candidate.status === 'purchase',
+      audience: candidate.audience || 'wooram',
+      candidate_status: candidate.status || null,
+      candidate_note: candidate.note || null,
+      candidate_review_at: candidate.reviewAt || null,
+      candidate_updated_at: new Date().toISOString()
+    })
     .eq('id', bookId)
     .select()
     .single();
@@ -153,12 +173,29 @@ module.exports = async (req, res) => {
   }
   
   try {
-    const { isbn, childAgeMonths, markInterested = false } = req.body;
+    const {
+      isbn,
+      childAgeMonths,
+      markInterested = false,
+      candidateStatus,
+      audience = 'wooram',
+      note = '',
+      reviewAt = null
+    } = req.body;
     
     if (!isbn) {
       return res.status(400).json({ error: 'ISBN이 필요합니다' });
     }
     
+    const allowedStatuses = new Set(['review', 'interested', 'purchase', 'owned', 'dismissed']);
+    const resolvedStatus = candidateStatus || (markInterested ? 'interested' : null);
+    if (resolvedStatus && !allowedStatuses.has(resolvedStatus)) {
+      return res.status(400).json({ error: '올바르지 않은 후보 상태입니다' });
+    }
+    if (!['wooram', 'boram'].includes(audience)) {
+      return res.status(400).json({ error: '대상은 우람이 또는 보람이여야 합니다' });
+    }
+
     // 1. Books 테이블에서 검색
     let existingBook = await findBookByISBN(isbn);
     let bookId;
@@ -166,34 +203,46 @@ module.exports = async (req, res) => {
     if (existingBook) {
       // 이미 있는 책
       bookId = existingBook.id;
-      if (markInterested && existingBook.fields['관심'] !== true) {
-        await markBookInterested(bookId);
+      if (resolvedStatus) {
+        await updateBookCandidate(bookId, { status: resolvedStatus, audience, note, reviewAt });
       }
     } else {
       // 없는 책 - 새로 추가
       console.log('📚 알라딘에서 책 정보 가져오는 중...');
       const bookInfo = await getBookFromAladin(isbn);
       
-      console.log('🤖 AI 가이드 생성 중...');
       let aiGuide = { ageRange: '', parentGuide: '', activities: '' };
-      try {
-        aiGuide = await generateBookGuide(bookInfo, { apiKey: OPENAI_API_KEY, childAgeMonths });
-      } catch (error) {
-        // 가이드 생성 실패가 책 등록 자체를 막지 않도록 기본 정보는 저장한다.
-        debugLog('[WHY] add-interested-book guide fallback:', error?.message || error);
+      const shouldGenerateGuide = audience === 'wooram' && (resolvedStatus === 'interested' || resolvedStatus === null);
+      if (shouldGenerateGuide) {
+        console.log('🤖 AI 가이드 생성 중...');
+        try {
+          aiGuide = await generateBookGuide(bookInfo, { apiKey: OPENAI_API_KEY, childAgeMonths });
+        } catch (error) {
+          // 가이드 생성 실패가 책 등록 자체를 막지 않도록 기본 정보는 저장한다.
+          debugLog('[WHY] add-interested-book guide fallback:', error?.message || error);
+        }
       }
       
       console.log('💾 Supabase에 저장 중...');
-      const newBook = await addBookToSupabase(bookInfo, aiGuide, markInterested === true);
+      const newBook = await addBookToSupabase(bookInfo, aiGuide, {
+        status: resolvedStatus,
+        audience,
+        note,
+        reviewAt
+      });
       bookId = newBook.id;
     }
 
     res.status(200).json({
       success: true,
-      message: markInterested ? '관심책에 추가되었습니다' : '책이 추가되었습니다',
+      message: resolvedStatus ? '책 후보함에 추가되었습니다' : '책이 추가되었습니다',
       bookId: bookId,
       isNew: !existingBook,
-      interested: markInterested === true || existingBook?.fields?.['관심'] === true
+      interested: resolvedStatus
+        ? resolvedStatus === 'interested' || resolvedStatus === 'purchase'
+        : existingBook?.fields?.['관심'] === true,
+      candidateStatus: resolvedStatus,
+      audience
     });
     
   } catch (error) {

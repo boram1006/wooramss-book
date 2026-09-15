@@ -1031,7 +1031,9 @@ module.exports = async (req, res) => {
       fetchAllRows(supabase, 'reading_logs')
     ]);
 
-    const allBooks = (allBooksData || []).map(book => ({
+    const allBooks = (allBooksData || [])
+      .filter(book => (book.audience || 'wooram') === 'wooram')
+      .map(book => ({
       id: book.id,
       fields: {
         'ISBN': book.isbn,

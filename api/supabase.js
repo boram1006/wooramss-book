@@ -49,7 +49,12 @@ function convertAirtableToSupabase(records, tableName, overrides) {
         '연령': record.age_range,
         '부모_읽기_가이드': record.parent_guide,
         '연계놀이': record.activities,
-        '관심': record.interested === true || record.interested === 'true' || record.interested === 1
+        '관심': record.interested === true || record.interested === 'true' || record.interested === 1,
+        '대상': record.audience || 'wooram',
+        '후보상태': record.candidate_status || (record.interested ? 'interested' : ''),
+        '후보메모': record.candidate_note || '',
+        '다시볼날짜': record.candidate_review_at || '',
+        '후보수정일': record.candidate_updated_at || ''
         }
       };
     });
@@ -88,7 +93,12 @@ function convertSupabaseToAirtable(data, tableName, overrides) {
         '연령': data.age_range,
         '부모_읽기_가이드': data.parent_guide,
         '연계놀이': data.activities,
-        '관심': data.interested
+        '관심': data.interested,
+        '대상': data.audience || 'wooram',
+        '후보상태': data.candidate_status || (data.interested ? 'interested' : ''),
+        '후보메모': data.candidate_note || '',
+        '다시볼날짜': data.candidate_review_at || '',
+        '후보수정일': data.candidate_updated_at || ''
       }
     };
   } else if (tableName === 'ReadingLog' || tableName === 'reading_logs') {
@@ -113,7 +123,7 @@ function convertSupabaseToAirtable(data, tableName, overrides) {
 function convertFieldsToSupabase(fields, tableName) {
   if (tableName === 'Books' || tableName === 'books') {
     // 관심 필드는 boolean으로 명시적 변환
-    let interested = false;
+    let interested;
     if (fields['관심'] !== undefined && fields['관심'] !== null) {
       if (typeof fields['관심'] === 'boolean') {
         interested = fields['관심'];
@@ -136,7 +146,12 @@ function convertFieldsToSupabase(fields, tableName) {
       age_range: fields['연령'],
       parent_guide: fields['부모_읽기_가이드'],
       activities: fields['연계놀이'],
-      interested: interested
+      interested,
+      audience: fields['대상'],
+      candidate_status: fields['후보상태'],
+      candidate_note: fields['후보메모'],
+      candidate_review_at: fields['다시볼날짜'],
+      candidate_updated_at: fields['후보수정일']
     };
   } else if (tableName === 'ReadingLog' || tableName === 'reading_logs') {
     return {

@@ -62,11 +62,11 @@ async function recognizeBookSpines(req, res) {
     return res.status(413).json({ error: '사진 용량이 너무 큽니다. 사진 수를 줄여 다시 시도해주세요.' });
   }
 
-  const prompt = `이 사진들은 사용자가 읽은 어린이책들의 책등 사진이다.
-사진마다 보이는 책등을 하나씩 살펴보고, 실제로 읽을 수 있는 제목만 추출하라.
+  const prompt = `이 사진들은 사용자가 찾고 싶은 책의 표지 또는 여러 어린이책의 책등 사진이다.
+사진마다 보이는 표지와 책등을 살펴보고, 실제로 읽을 수 있는 제목만 추출하라.
 
 규칙:
-- 한국어 세로쓰기와 회전된 책등 글자를 고려한다.
+- 표지의 큰 제목과 한국어 세로쓰기, 회전된 책등 글자를 고려한다.
 - 제목을 추측해서 만들어내지 않는다.
 - 같은 책이 여러 사진에 있으면 한 번만 반환한다.
 - 시리즈명만 보이고 개별 제목을 구분할 수 없으면 confidence를 low로 둔다.
@@ -145,10 +145,21 @@ module.exports = async (req, res) => {
       return res.status(400).json({ error: '검색어를 입력해주세요' });
     }
     
-    // ISBN 검색인 경우 ItemLookUp API 사용 (더 정확함)
-    if (isbn === 'true' || /^[0-9]{10,13}[0-9X]*$/.test(query.replace(/[^0-9X]/g, ''))) {
-      const isbnCode = query.replace(/[^0-9X]/g, '');
-      const url = `http://www.aladin.co.kr/ttb/api/ItemLookUp.aspx?ttbkey=${ALADIN_API_KEY}&itemIdType=ISBN&ItemId=${isbnCode}&output=js&Version=20131101&Cover=Big`;
+    let aladinItemId = '';
+    try {
+      const parsedUrl = new URL(query);
+      if (/(^|\.)aladin\.co\.kr$/i.test(parsedUrl.hostname)) {
+        aladinItemId = parsedUrl.searchParams.get('ItemId') || parsedUrl.searchParams.get('itemid') || '';
+      }
+    } catch (error) {
+      // URL이 아니면 일반 검색어로 처리한다.
+    }
+
+    // ISBN 또는 알라딘 상품 링크 검색인 경우 ItemLookUp API 사용
+    if (aladinItemId || isbn === 'true' || /^[0-9]{10,13}[0-9X]*$/.test(query.replace(/[^0-9X]/g, ''))) {
+      const itemId = aladinItemId || query.replace(/[^0-9X]/g, '');
+      const itemIdType = aladinItemId ? 'ItemId' : 'ISBN';
+      const url = `https://www.aladin.co.kr/ttb/api/ItemLookUp.aspx?ttbkey=${ALADIN_API_KEY}&itemIdType=${itemIdType}&ItemId=${encodeURIComponent(itemId)}&output=js&Version=20131101&Cover=Big`;
       
       const response = await fetch(url);
       const data = await response.json();

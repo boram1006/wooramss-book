@@ -140,6 +140,7 @@ const { useState, useEffect, useRef } = React;
 
         function App() {
             const [books, setBooks] = useState([]);
+            const [candidateBooks, setCandidateBooks] = useState([]);
             const [readingLogs, setReadingLogs] = useState([]);
             const [loading, setLoading] = useState(true);
             const [currentView, setCurrentView] = useState('home'); // home, collection, theme, all, filter, settings
@@ -227,6 +228,9 @@ const { useState, useEffect, useRef } = React;
             const [aladinLoading, setAladinLoading] = useState(false);
             const [filterType, setFilterType] = useState(null);
             const [showSearchModal, setShowSearchModal] = useState(false);
+            const [candidateAddAudience, setCandidateAddAudience] = useState('wooram');
+            const [candidateAddNote, setCandidateAddNote] = useState('');
+            const [candidateAddReviewAt, setCandidateAddReviewAt] = useState('');
             const [showReadPhotoModal, setShowReadPhotoModal] = useState(false);
             const [searchQuery, setSearchQuery] = useState('');
             const [searchScanOpen, setSearchScanOpen] = useState(false);
@@ -239,6 +243,7 @@ const { useState, useEffect, useRef } = React;
             const searchStreamRef = useRef(null);
             const [searchResults, setSearchResults] = useState([]);
             const [searchLoading, setSearchLoading] = useState(false); // 'read', 'loved', 'reading'
+            const [candidatePhotoLoading, setCandidatePhotoLoading] = useState(false);
             const [showChildProfile, setShowChildProfile] = useState(false);
             const [childProfile, setChildProfile] = useState(() => {
                 // localStorage에서 아이 프로필 불러오기
@@ -382,7 +387,8 @@ const { useState, useEffect, useRef } = React;
                         fetchAirtable(CONFIG.BOOKS_TABLE),
                         fetchAirtable(CONFIG.READING_LOG_TABLE)
                     ]);
-                    setBooks(booksData);
+                    setCandidateBooks(booksData);
+                    setBooks(booksData.filter(book => (book.fields['대상'] || 'wooram') === 'wooram'));
                     setReadingLogs(logsData);
                     
                     // 읽기 기록 수 비교 (10권 이상 증가했으면 강제 새로고침)
@@ -700,12 +706,12 @@ const { useState, useEffect, useRef } = React;
                 }
             }
 
-            // 📖 기존/신규 여부와 관계없이 관심책으로 한 번에 저장
-            async function addInterestedBook(book) {
+            // 📖 기존/신규 여부와 관계없이 후보 상태까지 한 번에 저장
+            async function addCandidateBook(book, candidateStatus = 'review', audience = 'wooram', note = '', reviewAt = null) {
                 try {
                     const isbn = book.isbn13 || book.isbn;
                     if (!isbn) {
-                        notify('ISBN이 없어 관심책으로 추가할 수 없습니다.');
+                        notify('ISBN이 없어 후보함에 추가할 수 없습니다.');
                         return false;
                     }
 
@@ -715,7 +721,10 @@ const { useState, useEffect, useRef } = React;
                         body: JSON.stringify({
                             isbn,
                             childAgeMonths: effectiveAgeMonths,
-                            markInterested: true
+                            candidateStatus,
+                            audience,
+                            note,
+                            reviewAt
                         })
                     });
                     const data = await response.json();
@@ -724,14 +733,62 @@ const { useState, useEffect, useRef } = React;
                         return false;
                     }
 
-                    notify('관심책에 추가되었습니다!');
+                    notify('책 후보함에 추가되었습니다!');
                     await loadData();
+                    setCandidateAddNote('');
+                    setCandidateAddReviewAt('');
                     return true;
                 } catch (error) {
-                    console.error('관심책 추가 오류:', error);
-                    notify('관심책 추가 중 오류가 발생했습니다');
+                    console.error('책 후보 추가 오류:', error);
+                    notify('책 후보 추가 중 오류가 발생했습니다');
                     return false;
                 }
+            }
+
+            async function searchCandidateByPhoto(event) {
+                const file = event.target.files?.[0];
+                event.target.value = '';
+                if (!file) return;
+                setCandidatePhotoLoading(true);
+                try {
+                    const dataUrl = await new Promise((resolve, reject) => {
+                        const reader = new FileReader();
+                        reader.onerror = () => reject(new Error('사진을 읽지 못했습니다.'));
+                        reader.onload = () => {
+                            const image = new Image();
+                            image.onerror = () => reject(new Error('지원하지 않는 이미지입니다.'));
+                            image.onload = () => {
+                                const scale = Math.min(1, 1800 / Math.max(image.width, image.height));
+                                const canvas = document.createElement('canvas');
+                                canvas.width = Math.round(image.width * scale);
+                                canvas.height = Math.round(image.height * scale);
+                                canvas.getContext('2d').drawImage(image, 0, 0, canvas.width, canvas.height);
+                                resolve(canvas.toDataURL('image/jpeg', 0.78));
+                            };
+                            image.src = reader.result;
+                        };
+                        reader.readAsDataURL(file);
+                    });
+                    const response = await fetch('/api/aladin-search', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ images: [dataUrl] })
+                    });
+                    const data = await response.json();
+                    if (!response.ok || !data.success) throw new Error(data.error || '사진 분석 실패');
+                    const candidates = (data.books || []).flatMap(item => item.candidates || []);
+                    setSearchResults(Array.from(new Map(candidates.map(book => [book.isbn, book])).values()));
+                    if (!candidates.length) notify('사진에서 책을 찾지 못했습니다. 제목으로 검색해주세요.');
+                } catch (error) {
+                    console.error('후보 책 사진 검색 오류:', error);
+                    notify('사진에서 책을 찾지 못했습니다.');
+                } finally {
+                    setCandidatePhotoLoading(false);
+                }
+            }
+
+            async function addInterestedBook(book) {
+                return addCandidateBook(book, 'interested', 'wooram');
             }
 
             async function fetchAirtable(tableName) {
@@ -786,7 +843,7 @@ const { useState, useEffect, useRef } = React;
                 total: books.length,
                 read: readingLogs.length,
                 loved: readingLogs.filter(log => log.fields['아이반응'] === '😍').length,
-                interested: books.filter(b => b.fields['관심'] === true || b.fields['관심'] === 'true').length
+                interested: candidateBooks.filter(b => ['review', 'interested', 'purchase'].includes(b.fields['후보상태'])).length
             };
 
             // 🎯 오늘의 추천 (점수 기반 알고리즘)
@@ -1144,14 +1201,14 @@ const { useState, useEffect, useRef } = React;
                                 <span>읽은 책</span>
                             </div>
                             <div 
-                                className={`nav-item ${currentView === 'filter' && filterType === 'interested' ? 'active' : ''}`}
+                                className={`nav-item ${currentView === 'filter' && filterType === 'candidates' ? 'active' : ''}`}
                                 onClick={() => {
-                                    changeView('filter', { filterType: 'interested' });
+                                    changeView('filter', { filterType: 'candidates' });
                                     closeSidebarIfMobile();
                                 }}
                             >
                                 <span><AppIcon name="heart" /></span>
-                                <span>관심책</span>
+                                <span>책 후보함</span>
                             </div>
                             <div 
                                 className={`nav-item ${currentView === 'settings' ? 'active' : ''}`}
@@ -1309,13 +1366,13 @@ const { useState, useEffect, useRef } = React;
                                 </div>
                                 <div 
                                     className="stat-card"
-                                    onClick={() => changeView('filter', { filterType: 'interested' })}
+                                    onClick={() => changeView('filter', { filterType: 'candidates' })}
                                 >
                                     <div className="stat-icon" style={{ background: '#FFF3E0', borderRadius: '12px' }}>
                                         <AppIcon name="heart" size={22} />
                                     </div>
                                     <div className="stat-value">{stats.interested}</div>
-                                    <div className="stat-label">관심책</div>
+                                    <div className="stat-label">책 후보</div>
                                 </div>
                             </div>
 
@@ -1719,22 +1776,31 @@ const { useState, useEffect, useRef } = React;
                         />
                     )}
 
-                    {/* 필터 보기 (읽음, 최애, 관심 있는 책) */}
+                    {/* 필터 보기 */}
                     {currentView === 'filter' && filterType && (
-                        <FilterView
-                            filterType={filterType}
-                            books={books}
-                            readingLogs={readingLogs}
-                            childAgeMonths={effectiveAgeMonths}
-                            onBack={() => {
-                                goHome();
-                                setFilterType(null);
-                            }}
-                            onSelectBook={selectBook}
-                            setShowSearchModal={setShowSearchModal}
-                            setShowReadPhotoModal={setShowReadPhotoModal}
-                            onDataUpdate={loadData}
-                        />
+                        filterType === 'candidates' ? (
+                            <CandidateBooksView
+                                books={candidateBooks}
+                                onSelectBook={selectBook}
+                                onAdd={() => setShowSearchModal(true)}
+                                onDataUpdate={loadData}
+                            />
+                        ) : (
+                            <FilterView
+                                filterType={filterType}
+                                books={books}
+                                readingLogs={readingLogs}
+                                childAgeMonths={effectiveAgeMonths}
+                                onBack={() => {
+                                    goHome();
+                                    setFilterType(null);
+                                }}
+                                onSelectBook={selectBook}
+                                setShowSearchModal={setShowSearchModal}
+                                setShowReadPhotoModal={setShowReadPhotoModal}
+                                onDataUpdate={loadData}
+                            />
+                        )
                     )}
 
                     {/* 책 추가 모달 */}
@@ -1803,24 +1869,15 @@ const { useState, useEffect, useRef } = React;
                                     <span>책 검색하기</span>
                                 </h2>
                                 {!searchScanOpen ? (
-                                    <button
-                                        onClick={handleSearchScanStart}
-                                        style={{
-                                            width: '100%',
-                                            padding: '0.75rem',
-                                            marginBottom: '1rem',
-                                            background: '#98D8C8',
-                                            border: 'none',
-                                            borderRadius: '10px',
-                                            color: 'white',
-                                            fontSize: '1rem',
-                                            fontWeight: 'bold',
-                                            cursor: 'pointer'
-                                        }}
-                                    >
-                                        <AppIcon name="camera" size={17} />
-                                        <span>바코드로 검색</span>
-                                    </button>
+                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginBottom: '1rem' }}>
+                                        <button onClick={handleSearchScanStart} style={{ padding: '0.75rem', background: '#98D8C8', border: 'none', borderRadius: '10px', color: 'white', fontSize: '1rem', fontWeight: 'bold', cursor: 'pointer' }}>
+                                            <AppIcon name="camera" size={17} /><span>바코드 검색</span>
+                                        </button>
+                                        <label className="modal-secondary-button modal-accent-button" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '7px', padding: '0.75rem', borderRadius: '10px', cursor: candidatePhotoLoading ? 'wait' : 'pointer' }}>
+                                            <AppIcon name="camera" size={17} /><span>{candidatePhotoLoading ? '사진 분석 중...' : '표지 사진 검색'}</span>
+                                            <input type="file" accept="image/*" capture="environment" onChange={searchCandidateByPhoto} disabled={candidatePhotoLoading} style={{ display: 'none' }} />
+                                        </label>
+                                    </div>
                                 ) : (
                                     <div style={{ marginBottom: '1rem' }}>
                                         <div style={{
@@ -1942,7 +1999,7 @@ const { useState, useEffect, useRef } = React;
                                         value={searchQuery}
                                         onChange={(e) => setSearchQuery(e.target.value)}
                                         onKeyPress={(e) => e.key === 'Enter' && searchAladinBooks(searchQuery)}
-                                        placeholder="책 제목을 입력하세요"
+                                        placeholder="책 제목, ISBN, 알라딘 링크"
                                         style={{
                                             flex: 1,
                                             padding: '0.75rem',
@@ -1967,6 +2024,11 @@ const { useState, useEffect, useRef } = React;
                                     >
                                         {searchLoading ? '검색 중...' : '검색'}
                                     </button>
+                                </div>
+
+                                <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: '8px', marginBottom: '1rem' }}>
+                                    <input type="text" value={candidateAddNote} onChange={e => setCandidateAddNote(e.target.value)} placeholder="메모 (선택)" style={{ padding: '0.7rem', border: '1px solid #ddd', borderRadius: '10px' }} />
+                                    <input type="date" value={candidateAddReviewAt} onChange={e => setCandidateAddReviewAt(e.target.value)} aria-label="다시 볼 날짜" style={{ padding: '0.7rem', border: '1px solid #ddd', borderRadius: '10px' }} />
                                 </div>
                                 
                                 {searchLoading && (
@@ -2006,8 +2068,13 @@ const { useState, useEffect, useRef } = React;
                                                     <p style={{ fontSize: '0.9rem', color: '#666', marginBottom: '0.5rem' }}>
                                                         {book.author} | {book.publisher}
                                                     </p>
-                                                    <button
-                                                        onClick={() => addInterestedBook(book)}
+                                                    <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
+                                                        <select value={candidateAddAudience} onChange={e => setCandidateAddAudience(e.target.value)} aria-label="책 대상" style={{ padding: '0.5rem', borderRadius: '8px', border: '1px solid #ddd' }}>
+                                                            <option value="wooram">우람이 책</option>
+                                                            <option value="boram">보람이 책</option>
+                                                        </select>
+                                                        <button
+                                                        onClick={() => addCandidateBook(book, 'review', candidateAddAudience, candidateAddNote, candidateAddReviewAt || null)}
                                                         style={{
                                                             padding: '0.5rem 1rem',
                                                             background: '#DDA0DD',
@@ -2019,8 +2086,9 @@ const { useState, useEffect, useRef } = React;
                                                         }}
                                                     >
                                                         <AppIcon name="heart" size={16} />
-                                                        <span>관심 있는 책 추가</span>
+                                                        <span>검토할 책으로 추가</span>
                                                     </button>
+                                                    </div>
                                                 </div>
                                             </div>
                                         ))}
@@ -3443,6 +3511,219 @@ const { useState, useEffect, useRef } = React;
             );
         }
 
+        const CANDIDATE_STATUS_OPTIONS = [
+            { value: 'review', label: '검토할 책' },
+            { value: 'interested', label: '관심 책' },
+            { value: 'purchase', label: '구매 대기' },
+            { value: 'owned', label: '보유 중' },
+            { value: 'dismissed', label: '제외' }
+        ];
+
+        const RECOMMENDATION_LISTS = [
+            { name: '어린이도서연구회', detail: '연간 추천도서', audience: 'wooram', cadenceDays: 365, url: 'https://www.childbook.org/news/notice_list.html?b_class=1' },
+            { name: '국립어린이청소년도서관', detail: '사서추천도서 · 격월', audience: 'wooram', cadenceDays: 60, url: 'https://www.nlcy.go.kr/NLCY/contents/C10600000000.do?schBdcode=_nlcy_normal0803' },
+            { name: '북스타트', detail: '영유아 단계별 선정도서', audience: 'wooram', cadenceDays: 365, url: 'https://bookstart.org/' },
+            { name: '칼데콧 메달', detail: '매년 1월 발표', audience: 'wooram', cadenceDays: 365, url: 'https://www.ala.org/alsc/awardsgrants/bookmedia/caldecott' },
+            { name: '볼로냐 라가치상', detail: '국제 아동도서상', audience: 'wooram', cadenceDays: 365, url: 'https://www.bolognachildrensbookfair.com/en/awards/bolognaragazzi-awards/8382.html' },
+            { name: '화이트 레이븐스', detail: '세계 주목할 아동서 · 연간', audience: 'wooram', cadenceDays: 365, url: 'https://www.ijb.de/en/home/the-white-ravens' },
+            { name: 'IBBY 아너리스트', detail: '작가·그림·번역 · 격년', audience: 'wooram', cadenceDays: 730, url: 'https://www.ibby.org/awards-activities/awards/ibby-honour-list/' },
+            { name: 'NYPL Best Books', detail: '어린이 신간 · 연간', audience: 'wooram', cadenceDays: 365, url: 'https://www.nypl.org/books-music-movies/about-annual-lists' },
+            { name: '세종도서', detail: '교양 · 육아/교육 분야', audience: 'boram', cadenceDays: 365, url: 'https://bookapply.kpipa.or.kr/front/intro/information.do' },
+            { name: '행복한아침독서', detail: '분기별 추천도서', audience: 'wooram', cadenceDays: 90, url: 'https://www.aladin.co.kr/shop/wbrowse.aspx?cid=71292' }
+        ];
+
+        function CandidateBooksView({ books, onSelectBook, onAdd, onDataUpdate }) {
+            const [status, setStatus] = useState(() =>
+                books.some(book => book.fields['후보상태'] === 'review') ? 'review' :
+                books.some(book => book.fields['후보상태'] === 'interested') ? 'interested' : 'review'
+            );
+            const [audience, setAudience] = useState('all');
+            const [searchTerm, setSearchTerm] = useState('');
+            const [selectedIds, setSelectedIds] = useState([]);
+            const [showLists, setShowLists] = useState(false);
+            const [savingId, setSavingId] = useState(null);
+            const [checkedLists, setCheckedLists] = useState(() => {
+                try { return JSON.parse(localStorage.getItem('recommendationListChecks') || '{}'); }
+                catch (error) { return {}; }
+            });
+
+            const candidateBooks = books.filter(book => Boolean(book.fields['후보상태']));
+            const statusCounts = Object.fromEntries(CANDIDATE_STATUS_OPTIONS.map(option => [
+                option.value,
+                candidateBooks.filter(book => book.fields['후보상태'] === option.value).length
+            ]));
+            const visibleBooks = candidateBooks.filter(book => {
+                const fields = book.fields;
+                if (fields['후보상태'] !== status) return false;
+                if (audience !== 'all' && (fields['대상'] || 'wooram') !== audience) return false;
+                const haystack = `${fields['제목'] || ''} ${fields['저자'] || ''} ${fields['후보메모'] || ''}`.toLowerCase();
+                return !searchTerm || haystack.includes(searchTerm.toLowerCase());
+            });
+
+            const updateCandidate = async (book, changes) => {
+                setSavingId(book.id);
+                try {
+                    const currentStatus = changes['후보상태'] || book.fields['후보상태'];
+                    const fields = {
+                        ...changes,
+                        '후보수정일': new Date().toISOString()
+                    };
+                    if (changes['후보상태']) {
+                        fields['관심'] = currentStatus === 'interested' || currentStatus === 'purchase';
+                    }
+                    const response = await fetch('/api/update-book-field', {
+                        method: 'PATCH',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ recordId: book.id, fields })
+                    });
+                    const data = await response.json();
+                    if (!response.ok || !data.success) throw new Error(data.error || '저장 실패');
+                    await onDataUpdate();
+                } catch (error) {
+                    console.error('후보함 업데이트 오류:', error);
+                    notify('후보함 변경을 저장하지 못했습니다.');
+                } finally {
+                    setSavingId(null);
+                }
+            };
+
+            const togglePurchaseSelection = (bookId) => {
+                setSelectedIds(current => {
+                    if (current.includes(bookId)) return current.filter(id => id !== bookId);
+                    if (current.length >= 8) {
+                        notify('책모아에는 한 번에 최대 8권까지 보낼 수 있어요.');
+                        return current;
+                    }
+                    return [...current, bookId];
+                });
+            };
+
+            const copyAladinLinks = async () => {
+                const selectedBooks = visibleBooks.filter(book => selectedIds.includes(book.id));
+                if (!selectedBooks.length) return notify('책을 먼저 선택해주세요.');
+                try {
+                    const links = (await Promise.all(selectedBooks.map(async book => {
+                        const isbn = book.fields['ISBN'];
+                        if (!isbn) return null;
+                        const response = await fetch(`/api/aladin-search?query=${encodeURIComponent(isbn)}&isbn=true`);
+                        const data = await response.json();
+                        return data.books?.[0]?.link || null;
+                    }))).filter(Boolean);
+                    if (!links.length) throw new Error('알라딘 링크 없음');
+                    await navigator.clipboard.writeText(links.join('\n'));
+                    notify(`${links.length}권의 알라딘 링크를 복사했습니다. 책모아에 붙여넣으세요.`);
+                } catch (error) {
+                    console.error('알라딘 링크 복사 오류:', error);
+                    notify('알라딘 링크를 복사하지 못했습니다.');
+                }
+            };
+
+            const markListChecked = (source) => {
+                const next = { ...checkedLists, [source.name]: new Date().toISOString() };
+                setCheckedLists(next);
+                localStorage.setItem('recommendationListChecks', JSON.stringify(next));
+            };
+
+            const isListDue = (source) => {
+                const lastChecked = checkedLists[source.name];
+                if (!lastChecked) return true;
+                return Date.now() - new Date(lastChecked).getTime() >= source.cadenceDays * 24 * 60 * 60 * 1000;
+            };
+
+            return (
+                <div className="catalog-view candidate-view">
+                    <div className="view-heading">
+                        <span className="view-eyebrow">BOOK SHORTLIST</span>
+                        <h2>책 후보함</h2>
+                        <p>발견한 책을 검토하고, 관심·구매·보유까지 한곳에서 정리해요.</p>
+                    </div>
+
+                    <div className="candidate-top-actions">
+                        <button className="clay-button clay-button-primary" onClick={onAdd}><AppIcon name="plus" size={18} /> 후보 추가</button>
+                        <button className="clay-button clay-button-secondary" onClick={() => setShowLists(value => !value)}>
+                            <AppIcon name="sparkle" size={18} /> 추천 목록 확인
+                        </button>
+                    </div>
+
+                    {showLists && (
+                        <div className="recommendation-list-panel">
+                            <div>
+                                <h3>놓치지 말고 확인할 추천 목록</h3>
+                                <p>책마다 출처를 저장하지 않고, 발표처 링크만 모았습니다.</p>
+                            </div>
+                            <div className="recommendation-list-grid">
+                                {RECOMMENDATION_LISTS.map(source => (
+                                    <a key={source.name} href={source.url} target="_blank" rel="noreferrer" className="recommendation-source-link" onClick={() => markListChecked(source)}>
+                                        <strong>{source.name} {isListDue(source) && <em>확인 필요</em>}</strong>
+                                        <span>{source.detail} · {source.audience === 'wooram' ? '우람이 책' : '보람이 책'}</span>
+                                        {checkedLists[source.name] && <small>마지막 확인 {new Date(checkedLists[source.name]).toLocaleDateString('ko-KR')}</small>}
+                                    </a>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+
+                    <div className="candidate-status-tabs" role="tablist" aria-label="후보 상태">
+                        {CANDIDATE_STATUS_OPTIONS.map(option => (
+                            <button key={option.value} className={status === option.value ? 'active' : ''} onClick={() => { setStatus(option.value); setSelectedIds([]); }}>
+                                {option.label} <span>{statusCounts[option.value] || 0}</span>
+                            </button>
+                        ))}
+                    </div>
+
+                    <div className="catalog-toolbar">
+                        <label className="catalog-search-wrap">
+                            <AppIcon name="search" size={19} />
+                            <input className="catalog-search" type="search" placeholder="제목, 저자, 메모로 검색" value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
+                        </label>
+                        <select className="catalog-sort" value={audience} onChange={e => setAudience(e.target.value)} aria-label="책 대상">
+                            <option value="all">전체</option>
+                            <option value="wooram">우람이 책</option>
+                            <option value="boram">보람이 책</option>
+                        </select>
+                        {status === 'purchase' && (
+                            <button className="clay-button clay-button-primary" disabled={!selectedIds.length} onClick={copyAladinLinks}>알라딘 링크 복사 ({selectedIds.length}/8)</button>
+                        )}
+                    </div>
+
+                    {visibleBooks.length === 0 ? (
+                        <div className="catalog-empty">
+                            <div className="catalog-empty-icon"><AppIcon name="brand" size={30} /></div>
+                            <h3>이 단계에는 아직 책이 없어요</h3>
+                            <p>후보를 추가하거나 다른 탭을 확인해보세요.</p>
+                        </div>
+                    ) : (
+                        <div className="candidate-grid">
+                            {visibleBooks.map(book => (
+                                <article className="candidate-card" key={book.id}>
+                                    {status === 'purchase' && (
+                                        <label className="candidate-select"><input type="checkbox" checked={selectedIds.includes(book.id)} onChange={() => togglePurchaseSelection(book.id)} /> 책모아로 보내기</label>
+                                    )}
+                                    <button className="candidate-book-main" onClick={() => onSelectBook(book)}>
+                                        <img src={book.fields['표지이미지']} alt="" />
+                                        <span><strong>{book.fields['제목']}</strong><small>{book.fields['저자']} · {book.fields['출판사']}</small></span>
+                                    </button>
+                                    <div className="candidate-fields">
+                                        <select value={book.fields['대상'] || 'wooram'} onChange={e => updateCandidate(book, { '대상': e.target.value })} disabled={savingId === book.id}>
+                                            <option value="wooram">우람이 책</option>
+                                            <option value="boram">보람이 책</option>
+                                        </select>
+                                        <select value={book.fields['후보상태']} onChange={e => updateCandidate(book, { '후보상태': e.target.value })} disabled={savingId === book.id}>
+                                            {CANDIDATE_STATUS_OPTIONS.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
+                                        </select>
+                                        <textarea defaultValue={book.fields['후보메모'] || ''} placeholder="왜 다시 볼 책인지 메모" onBlur={e => {
+                                            if (e.target.value !== (book.fields['후보메모'] || '')) updateCandidate(book, { '후보메모': e.target.value });
+                                        }} />
+                                        <label>다시 볼 날짜<input type="date" value={book.fields['다시볼날짜'] || ''} onChange={e => updateCandidate(book, { '다시볼날짜': e.target.value || null })} /></label>
+                                    </div>
+                                </article>
+                            ))}
+                        </div>
+                    )}
+                </div>
+            );
+        }
+
         function FilterView({ filterType, books, readingLogs, childAgeMonths, onBack, onSelectBook, setShowSearchModal, setShowReadPhotoModal, onDataUpdate }) {
             const filterInfo = {
                 'read': { title: '✅ 읽은 책', icon: '✅', color: '#98D8C8' },
@@ -3834,7 +4115,10 @@ const { useState, useEffect, useRef } = React;
                         body: JSON.stringify({
                             recordId: book.id,
                             fields: {
-                                '관심': !isInInterested
+                                '관심': !isInInterested,
+                                '후보상태': !isInInterested ? 'interested' : 'review',
+                                '대상': book.fields['대상'] || 'wooram',
+                                '후보수정일': new Date().toISOString()
                             }
                         })
                     });
@@ -3843,7 +4127,7 @@ const { useState, useEffect, useRef } = React;
                     
                     if (data.success) {
                         setIsInInterested(!isInInterested);
-                        notify(!isInInterested ? '관심책에 추가되었습니다!' : '관심책에서 제거되었습니다.');
+                        notify(!isInInterested ? '관심 책으로 옮겼습니다!' : '검토할 책으로 옮겼습니다.');
                         // 데이터 새로고침
                         if (onDataUpdate) {
                             await onDataUpdate();
@@ -3852,8 +4136,8 @@ const { useState, useEffect, useRef } = React;
                         notify('오류: ' + (data.error || '저장 실패'));
                     }
                 } catch (error) {
-                    console.error('관심책 저장 오류:', error);
-                    notify('관심책 저장 중 오류가 발생했습니다');
+                    console.error('후보 상태 저장 오류:', error);
+                    notify('후보 상태 저장 중 오류가 발생했습니다');
                 }
             };
 
@@ -3994,7 +4278,7 @@ const { useState, useEffect, useRef } = React;
                                 }}
                                 onMouseEnter={(e) => e.target.style.transform = 'scale(1.1)'}
                                 onMouseLeave={(e) => e.target.style.transform = 'scale(1)'}
-                                title={isInInterested ? '관심책에서 제거' : '관심책에 추가'}
+                                title={isInInterested ? '검토할 책으로 이동' : '관심 책으로 이동'}
                             >
                                 <AppIcon name="heart" size={22} />
                             </button>
@@ -5151,7 +5435,7 @@ const { useState, useEffect, useRef } = React;
                                 }}
                             >
                                 <AppIcon name="heart" size={17} />
-                                <span>{addingToInterested ? '추가 중...' : '관심책으로 추가하기'}</span>
+                                <span>{addingToInterested ? '추가 중...' : '관심 책으로 추가하기'}</span>
                             </button>
                         </div>
                     </div>

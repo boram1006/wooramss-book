@@ -2075,6 +2075,97 @@
             margin-top: 24px;
         }
 
+        .candidate-top-actions {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin: -10px 0 22px;
+        }
+
+        .recommendation-list-panel {
+            margin-bottom: 22px;
+            padding: 22px;
+            border: 1px solid var(--clay-line);
+            border-radius: var(--clay-radius-md);
+            background: rgba(255, 255, 255, 0.62);
+        }
+
+        .recommendation-list-panel h3 { margin: 0 0 5px; }
+        .recommendation-list-panel p { margin: 0 0 16px; color: var(--clay-muted); font-size: 13px; }
+        .recommendation-list-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 9px; }
+        .recommendation-source-link {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            padding: 13px 14px;
+            border: 1px solid var(--clay-line);
+            border-radius: 12px;
+            background: var(--clay-canvas);
+            color: var(--clay-ink);
+            text-decoration: none;
+        }
+        .recommendation-source-link:hover { border-color: var(--clay-action); }
+        .recommendation-source-link span { color: var(--clay-muted); font-size: 12px; }
+        .recommendation-source-link small { color: var(--clay-muted); font-size: 11px; }
+        .recommendation-source-link em { margin-left: 5px; color: #9b4427; font-size: 10px; font-style: normal; }
+
+        .candidate-status-tabs { display: flex; gap: 8px; overflow-x: auto; margin-bottom: 12px; padding-bottom: 4px; }
+        .candidate-status-tabs button {
+            flex: 0 0 auto;
+            padding: 10px 14px;
+            border: 1px solid var(--clay-line);
+            border-radius: 999px;
+            background: rgba(255,255,255,.6);
+            color: var(--clay-body);
+            font-weight: 700;
+            cursor: pointer;
+        }
+        .candidate-status-tabs button.active { background: var(--clay-ink); color: white; border-color: var(--clay-ink); }
+        .candidate-status-tabs button span { margin-left: 5px; opacity: .7; }
+        .candidate-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(290px, 1fr)); gap: 16px; }
+        .candidate-card {
+            padding: 15px;
+            border: 1px solid var(--clay-line);
+            border-radius: var(--clay-radius-md);
+            background: rgba(255,255,255,.66);
+        }
+        .candidate-select { display: flex; align-items: center; gap: 7px; margin-bottom: 10px; font-size: 12px; font-weight: 700; }
+        .candidate-book-main {
+            width: 100%;
+            display: flex;
+            align-items: center;
+            gap: 13px;
+            padding: 0;
+            border: 0;
+            background: none;
+            color: var(--clay-ink);
+            text-align: left;
+            cursor: pointer;
+        }
+        .candidate-book-main img { width: 68px; height: 92px; object-fit: cover; border-radius: 9px; background: var(--clay-card); }
+        .candidate-book-main span { min-width: 0; display: flex; flex-direction: column; gap: 7px; }
+        .candidate-book-main strong { line-height: 1.35; }
+        .candidate-book-main small { color: var(--clay-muted); line-height: 1.4; }
+        .candidate-fields { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 13px; }
+        .candidate-fields select, .candidate-fields textarea, .candidate-fields input {
+            width: 100%;
+            border: 1px solid var(--clay-line);
+            border-radius: 10px;
+            background: var(--clay-canvas);
+            color: var(--clay-body);
+            font: inherit;
+        }
+        .candidate-fields select, .candidate-fields input { min-height: 40px; padding: 0 10px; }
+        .candidate-fields textarea { grid-column: 1 / -1; min-height: 66px; padding: 10px; resize: vertical; }
+        .candidate-fields label { grid-column: 1 / -1; display: grid; grid-template-columns: auto 1fr; align-items: center; gap: 10px; color: var(--clay-muted); font-size: 12px; }
+
+        @media (max-width: 640px) {
+            .candidate-top-actions .clay-button { flex: 1; }
+            .candidate-view .catalog-toolbar { flex-wrap: wrap; }
+            .candidate-view .catalog-sort, .candidate-view .catalog-toolbar > .clay-button { width: 100%; }
+            .candidate-fields { grid-template-columns: 1fr; }
+        }
+
         @keyframes notice-in {
             from { opacity: 0; transform: translateY(10px) scale(0.98); }
             to { opacity: 1; transform: translateY(0) scale(1); }

@@ -16,7 +16,7 @@ function getSupabaseClient() {
 // Airtable fields를 Supabase 형식으로 변환
 function convertFieldsToSupabase(fields) {
   // 관심 필드는 boolean으로 명시적 변환
-  let interested = false;
+  let interested;
   if (fields['관심'] !== undefined && fields['관심'] !== null) {
     if (typeof fields['관심'] === 'boolean') {
       interested = fields['관심'];
@@ -39,7 +39,12 @@ function convertFieldsToSupabase(fields) {
     age_range: fields['연령'],
     parent_guide: fields['부모_읽기_가이드'],
     activities: fields['연계놀이'],
-    interested: interested
+    interested,
+    audience: fields['대상'],
+    candidate_status: fields['후보상태'],
+    candidate_note: fields['후보메모'],
+    candidate_review_at: fields['다시볼날짜'],
+    candidate_updated_at: fields['후보수정일']
   };
 }
 
@@ -66,12 +71,11 @@ export default async function handler(req, res) {
     const supabase = getSupabaseClient();
     const supabaseFields = convertFieldsToSupabase(fields);
 
-    // null이 아닌 필드만 업데이트 (boolean false는 포함)
+    // 전달되지 않은 필드만 제외한다. null은 메모/날짜를 비울 때 사용한다.
     const updateData = {};
     Object.keys(supabaseFields).forEach(key => {
       const value = supabaseFields[key];
-      // undefined나 null이 아니면 업데이트 (boolean false는 포함)
-      if (value !== undefined && value !== null) {
+      if (value !== undefined) {
         updateData[key] = value;
       }
     });
@@ -102,7 +106,12 @@ export default async function handler(req, res) {
         '연령': data.age_range,
         '부모_읽기_가이드': data.parent_guide,
         '연계놀이': data.activities,
-        '관심': data.interested
+        '관심': data.interested,
+        '대상': data.audience || 'wooram',
+        '후보상태': data.candidate_status || (data.interested ? 'interested' : ''),
+        '후보메모': data.candidate_note || '',
+        '다시볼날짜': data.candidate_review_at || '',
+        '후보수정일': data.candidate_updated_at || ''
       }
     };
 

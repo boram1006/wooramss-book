@@ -972,7 +972,9 @@ module.exports = async (req, res) => {
     ]);
 
     // Airtable 형식으로 변환 (하위 호환성)
-    const allBooks = (booksData || []).map(book => ({
+    const allBooks = (booksData || [])
+      .filter(book => (book.audience || 'wooram') === 'wooram')
+      .map(book => ({
       id: book.id,
       fields: {
         'ISBN': book.isbn,
