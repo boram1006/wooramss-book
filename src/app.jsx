@@ -230,7 +230,6 @@ const { useState, useEffect, useRef } = React;
             const [showSearchModal, setShowSearchModal] = useState(false);
             const [candidateAddAudience, setCandidateAddAudience] = useState('wooram');
             const [candidateAddNote, setCandidateAddNote] = useState('');
-            const [candidateAddReviewAt, setCandidateAddReviewAt] = useState('');
             const [showReadPhotoModal, setShowReadPhotoModal] = useState(false);
             const [searchQuery, setSearchQuery] = useState('');
             const [searchScanOpen, setSearchScanOpen] = useState(false);
@@ -707,7 +706,7 @@ const { useState, useEffect, useRef } = React;
             }
 
             // 📖 기존/신규 여부와 관계없이 후보 상태까지 한 번에 저장
-            async function addCandidateBook(book, candidateStatus = 'review', audience = 'wooram', note = '', reviewAt = null) {
+            async function addCandidateBook(book, candidateStatus = 'review', audience = 'wooram', note = '') {
                 try {
                     const isbn = book.isbn13 || book.isbn;
                     if (!isbn) {
@@ -723,8 +722,7 @@ const { useState, useEffect, useRef } = React;
                             childAgeMonths: effectiveAgeMonths,
                             candidateStatus,
                             audience,
-                            note,
-                            reviewAt
+                            note
                         })
                     });
                     const data = await response.json();
@@ -736,7 +734,6 @@ const { useState, useEffect, useRef } = React;
                     notify('책 후보함에 추가되었습니다!');
                     await loadData();
                     setCandidateAddNote('');
-                    setCandidateAddReviewAt('');
                     return true;
                 } catch (error) {
                     console.error('책 후보 추가 오류:', error);
@@ -2027,9 +2024,8 @@ const { useState, useEffect, useRef } = React;
                                     </button>
                                 </div>
 
-                                <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: '8px', marginBottom: '1rem' }}>
-                                    <input type="text" value={candidateAddNote} onChange={e => setCandidateAddNote(e.target.value)} placeholder="메모 (선택)" style={{ padding: '0.7rem', border: '1px solid #ddd', borderRadius: '10px' }} />
-                                    <input type="date" value={candidateAddReviewAt} onChange={e => setCandidateAddReviewAt(e.target.value)} aria-label="다시 볼 날짜" style={{ padding: '0.7rem', border: '1px solid #ddd', borderRadius: '10px' }} />
+                                <div style={{ marginBottom: '1rem' }}>
+                                    <input type="text" value={candidateAddNote} onChange={e => setCandidateAddNote(e.target.value)} placeholder="메모 (선택)" style={{ width: '100%', boxSizing: 'border-box', padding: '0.7rem', border: '1px solid #ddd', borderRadius: '10px' }} />
                                 </div>
                                 
                                 {searchLoading && (
@@ -2075,7 +2071,7 @@ const { useState, useEffect, useRef } = React;
                                                             <option value="boram">보람이 책</option>
                                                         </select>
                                                         <button
-                                                        onClick={() => addCandidateBook(book, 'review', candidateAddAudience, candidateAddNote, candidateAddReviewAt || null)}
+                                                        onClick={() => addCandidateBook(book, 'review', candidateAddAudience, candidateAddNote)}
                                                         style={{
                                                             padding: '0.5rem 1rem',
                                                             background: '#DDA0DD',
@@ -3810,7 +3806,6 @@ const { useState, useEffect, useRef } = React;
                                         <textarea defaultValue={book.fields['후보메모'] || ''} placeholder="왜 다시 볼 책인지 메모" onBlur={e => {
                                             if (e.target.value !== (book.fields['후보메모'] || '')) updateCandidate(book, { '후보메모': e.target.value });
                                         }} />
-                                        <label>다시 볼 날짜<input type="date" value={book.fields['다시볼날짜'] || ''} onChange={e => updateCandidate(book, { '다시볼날짜': e.target.value || null })} /></label>
                                     </div>
                                 </article>
                             ))}

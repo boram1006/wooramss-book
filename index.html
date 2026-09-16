@@ -2195,7 +2195,7 @@
         .candidate-book-main strong { line-height: 1.35; }
         .candidate-book-main small { color: var(--clay-muted); line-height: 1.4; }
         .candidate-fields { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 13px; }
-        .candidate-fields select, .candidate-fields textarea, .candidate-fields input {
+        .candidate-fields select, .candidate-fields textarea {
             width: 100%;
             border: 1px solid var(--clay-line);
             border-radius: 10px;
@@ -2203,9 +2203,8 @@
             color: var(--clay-body);
             font: inherit;
         }
-        .candidate-fields select, .candidate-fields input { min-height: 40px; padding: 0 10px; }
+        .candidate-fields select { min-height: 40px; padding: 0 10px; }
         .candidate-fields textarea { grid-column: 1 / -1; min-height: 66px; padding: 10px; resize: vertical; }
-        .candidate-fields label { grid-column: 1 / -1; display: grid; grid-template-columns: auto 1fr; align-items: center; gap: 10px; color: var(--clay-muted); font-size: 12px; }
 
         @media (max-width: 640px) {
             .candidate-top-actions .clay-button { flex: 1; }
