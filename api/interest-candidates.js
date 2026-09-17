@@ -241,16 +241,16 @@ module.exports = async (req, res) => {
       const validation = validateClassification(req.body);
       if (validation.error) return res.status(400).json({ success: false, error: validation.error });
 
-      const { normalizedExpression, status, mappedTheme } = validation.value;
+      const { normalizedExpression, status, mappedTheme, mappedThemes } = validation.value;
       const { data, error } = await supabase
         .from('unclassified_theme_logs')
         .update({
           status,
           mapped_theme: mappedTheme,
-          mapped_themes: status === 'mapped' ? [mappedTheme] : [],
+          mapped_themes: mappedThemes,
           resolution_scope: status === 'mapped' || status === 'excluded' ? 'global' : null,
           resolution_v2: status === 'mapped' || status === 'excluded'
-            ? { source: 'settings-manual', disposition: status, mappedThemes: mappedTheme ? [mappedTheme] : [] }
+            ? { source: 'settings-manual', disposition: status, mappedThemes }
             : null,
           resolved_at: status === 'mapped' || status === 'excluded' ? new Date().toISOString() : null
         })

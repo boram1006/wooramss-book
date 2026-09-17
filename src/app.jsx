@@ -4829,8 +4829,11 @@ const { useState, useEffect, useRef } = React;
                     setClassificationSelections(current => {
                         const next = { ...current };
                         (data.items || []).forEach(item => {
-                            if (!next[item.normalized_expression] && item.mapped_theme) {
-                                next[item.normalized_expression] = item.mapped_theme;
+                            if (!next[item.normalized_expression]) {
+                                const savedThemes = Array.isArray(item.mapped_themes) && item.mapped_themes.length
+                                    ? item.mapped_themes
+                                    : (item.mapped_theme ? [item.mapped_theme] : []);
+                                if (savedThemes.length) next[item.normalized_expression] = savedThemes;
                             }
                         });
                         return next;
@@ -4847,9 +4850,9 @@ const { useState, useEffect, useRef } = React;
             }, []);
 
             const handleClassification = async (item, action) => {
-                const mappedTheme = classificationSelections[item.normalized_expression] || '';
-                if (action === 'mapped' && !mappedTheme) {
-                    setClassificationError('연결할 표준 테마를 먼저 선택해주세요.');
+                const mappedThemes = classificationSelections[item.normalized_expression] || [];
+                if (action === 'mapped' && !mappedThemes.length) {
+                    setClassificationError('연결할 표준 테마를 하나 이상 선택해주세요.');
                     return;
                 }
 
@@ -4862,7 +4865,7 @@ const { useState, useEffect, useRef } = React;
                         body: JSON.stringify({
                             normalizedExpression: item.normalized_expression,
                             action,
-                            mappedTheme
+                            mappedThemes
                         })
                     });
                     const contentType = response.headers.get('content-type') || '';
@@ -4922,6 +4925,21 @@ const { useState, useEffect, useRef } = React;
                 } finally {
                     setResidualBusy('');
                 }
+            };
+
+            const addClassificationTheme = (expression, theme) => {
+                if (!theme) return;
+                setClassificationSelections(current => ({
+                    ...current,
+                    [expression]: [...new Set([...(current[expression] || []), theme])].slice(0, 4)
+                }));
+            };
+
+            const removeClassificationTheme = (expression, theme) => {
+                setClassificationSelections(current => ({
+                    ...current,
+                    [expression]: (current[expression] || []).filter(item => item !== theme)
+                }));
             };
 
             const handleResidualReview = async (book, action) => {
@@ -5309,6 +5327,7 @@ const { useState, useEffect, useRef } = React;
                             <div className="classification-list">
                                 {openClassifications.map(item => {
                                     const busy = classificationBusy === item.normalized_expression;
+                                    const selectedThemes = classificationSelections[item.normalized_expression] || [];
                                     return (
                                         <div className="classification-item" key={item.normalized_expression}>
                                             <div>
@@ -5324,29 +5343,35 @@ const { useState, useEffect, useRef } = React;
                                             </div>
                                             <div className="classification-controls">
                                                 <select
-                                                    value={classificationSelections[item.normalized_expression] || ''}
-                                                    onChange={(event) => setClassificationSelections(current => ({
-                                                        ...current,
-                                                        [item.normalized_expression]: event.target.value
-                                                    }))}
+                                                    value=""
+                                                    onChange={(event) => addClassificationTheme(item.normalized_expression, event.target.value)}
                                                     disabled={busy}
                                                     aria-label={`${item.raw_expression} 연결 테마`}
                                                 >
-                                                    <option value="">연결할 표준 테마</option>
+                                                    <option value="">{selectedThemes.length ? '테마 추가 선택' : '연결할 표준 테마 선택'}</option>
                                                     {classificationGroups.map(group => (
                                                         <optgroup label={group.label} key={group.id}>
-                                                            {group.themes.map(theme => <option value={theme} key={theme}>{theme}</option>)}
+                                                            {group.themes.filter(theme => !selectedThemes.includes(theme)).map(theme => <option value={theme} key={theme}>{theme}</option>)}
                                                         </optgroup>
                                                     ))}
                                                 </select>
                                                 <button
                                                     className="clay-button clay-button-primary"
                                                     type="button"
-                                                    disabled={busy || !classificationSelections[item.normalized_expression]}
+                                                    disabled={busy || !selectedThemes.length}
                                                     onClick={() => handleClassification(item, 'mapped')}
                                                 >
                                                     연결
                                                 </button>
+                                                {selectedThemes.length > 0 && (
+                                                    <div className="classification-selected-themes">
+                                                        {selectedThemes.map(theme => (
+                                                            <button type="button" key={theme} disabled={busy} onClick={() => removeClassificationTheme(item.normalized_expression, theme)}>
+                                                                {theme} ×
+                                                            </button>
+                                                        ))}
+                                                    </div>
+                                                )}
                                                 <div className="classification-secondary-actions">
                                                     <button
                                                         className="clay-button"

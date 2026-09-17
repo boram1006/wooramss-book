@@ -14,8 +14,22 @@ test('기존 표준 테마 연결 요청을 검증한다', () => {
     value: {
       normalizedExpression: '로봇과기계',
       status: 'mapped',
-      mappedTheme: '과학·탐구'
+      mappedTheme: '과학·탐구',
+      mappedThemes: ['과학·탐구']
     }
+  });
+});
+
+test('하나의 표현을 여러 표준 테마에 연결한다', () => {
+  assert.deepEqual(validateClassification({
+    normalizedExpression: '도움과우정',
+    action: 'mapped',
+    mappedThemes: ['친구·우정', '배려·나눔', '친구·우정']
+  }).value, {
+    normalizedExpression: '도움과우정',
+    status: 'mapped',
+    mappedTheme: '친구·우정',
+    mappedThemes: ['친구·우정', '배려·나눔']
   });
 });
 
