@@ -1680,6 +1680,49 @@
             background: rgba(255, 255, 255, 0.8);
         }
 
+        .taxonomy-residual-controls {
+            display: grid;
+            gap: 9px;
+            align-content: start;
+        }
+
+        .taxonomy-residual-controls > select {
+            width: 100%;
+            min-height: 42px;
+            padding: 0 12px;
+            border: 1px solid var(--clay-line);
+            border-radius: var(--clay-radius-sm);
+            background: white;
+            color: var(--clay-ink);
+        }
+
+        .taxonomy-residual-selected {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+        }
+
+        .taxonomy-residual-selected button {
+            padding: 5px 9px;
+            border: 1px solid var(--clay-line);
+            border-radius: 999px;
+            background: var(--clay-action-soft);
+            color: var(--clay-action);
+            font: inherit;
+            font-size: 11px;
+            cursor: pointer;
+        }
+
+        .taxonomy-residual-secondary {
+            display: flex;
+            justify-content: flex-end;
+            gap: 8px;
+        }
+
+        .taxonomy-residual-secondary .clay-button {
+            flex: 1;
+        }
+
         .classification-expression {
             margin-bottom: 6px;
             color: var(--clay-ink);
@@ -1772,6 +1815,7 @@
             .settings-save-button { width: 100%; }
             .classification-item { grid-template-columns: 1fr; }
             .classification-controls { grid-template-columns: 1fr; }
+            .taxonomy-residual-secondary { flex-direction: column; }
             .classification-secondary-actions { grid-column: auto; justify-content: stretch; }
             .classification-secondary-actions button { flex: 1; }
             .classification-pagination { align-items: flex-start; flex-direction: column; }

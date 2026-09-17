@@ -3,7 +3,9 @@ const assert = require('node:assert/strict');
 const {
   buildThemeOverrides,
   collectUnclassifiedObservations,
-  recordUnclassifiedObservations
+  recordUnclassifiedObservations,
+  validateResidualReview,
+  appendBookThemes
 } = require('../lib/theme-classification-store');
 
 test('처리된 분류 행을 연결·제외 오버라이드로 만든다', () => {
@@ -23,6 +25,25 @@ test('처리된 분류 행을 연결·제외 오버라이드로 만든다', () =
   assert.equal(overrides.get('콜라주'), null);
   assert.equal(overrides.has('선물'), false);
   assert.equal(overrides.has('바퀴친구'), false);
+});
+
+test('책별 잔여 검토는 표준 테마를 여러 개 적용하거나 추가 없음으로 끝낼 수 있다', () => {
+  assert.deepEqual(validateResidualReview({
+    bookId: 'book-1',
+    action: 'resolved',
+    mappedThemes: ['동물·생명', '공감·위로', '동물·생명']
+  }).value, {
+    bookId: 'book-1',
+    action: 'resolved',
+    mappedThemes: ['동물·생명', '공감·위로']
+  });
+  assert.deepEqual(validateResidualReview({ bookId: 'book-1', action: 'dismissed' }).value.mappedThemes, []);
+  assert.match(validateResidualReview({ bookId: 'book-1', action: 'resolved', mappedThemes: [] }).error, /표준 테마/);
+});
+
+test('책별 테마 추가는 기존 값을 보존하고 중복만 제거한다', () => {
+  assert.equal(appendBookThemes('가족,동물·생명', ['동물·생명', '공감·위로']), '가족,동물·생명,공감·위로');
+  assert.deepEqual(appendBookThemes(['가족'], ['공감·위로']), ['가족', '공감·위로']);
 });
 
 test('같은 출처의 동일 미분류 표현은 한 번만 저장 대상으로 모은다', () => {

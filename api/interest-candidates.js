@@ -11,7 +11,9 @@ const {
   loadOpenTaxonomyResiduals,
   loadThemeOverrides,
   recordUnclassifiedObservations,
-  validateClassification
+  validateClassification,
+  validateResidualReview,
+  appendBookThemes
 } = require('../lib/theme-classification-store');
 const { fetchAllRows } = require('../lib/supabase-pagination');
 
@@ -94,6 +96,45 @@ module.exports = async (req, res) => {
     }
 
     if (mode === 'classifications' && req.method === 'POST') {
+      if (req.body?.scope === 'book') {
+        const validation = validateResidualReview(req.body);
+        if (validation.error) return res.status(400).json({ success: false, error: validation.error });
+
+        const { bookId, action, mappedThemes } = validation.value;
+        const { data: residual, error: residualError } = await supabase
+          .from('taxonomy_review_residuals_v2')
+          .select('book_id,status')
+          .eq('book_id', bookId)
+          .eq('status', 'pending')
+          .maybeSingle();
+        if (residualError) throw residualError;
+        if (!residual) return res.status(404).json({ success: false, error: '이미 처리되었거나 찾을 수 없는 항목입니다.' });
+
+        if (action === 'resolved') {
+          const { data: book, error: bookError } = await supabase
+            .from('books')
+            .select('id,themes')
+            .eq('id', bookId)
+            .single();
+          if (bookError) throw bookError;
+          const { error: updateBookError } = await supabase
+            .from('books')
+            .update({ themes: appendBookThemes(book.themes, mappedThemes) })
+            .eq('id', bookId);
+          if (updateBookError) throw updateBookError;
+        }
+
+        const { data, error } = await supabase
+          .from('taxonomy_review_residuals_v2')
+          .update({ status: action, resolved_at: new Date().toISOString() })
+          .eq('book_id', bookId)
+          .eq('status', 'pending')
+          .select('*')
+          .single();
+        if (error) throw error;
+        return res.status(200).json({ success: true, item: data, mappedThemes });
+      }
+
       const validation = validateClassification(req.body);
       if (validation.error) return res.status(400).json({ success: false, error: validation.error });
 

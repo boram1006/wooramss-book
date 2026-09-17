@@ -2188,6 +2188,8 @@ const { useState, useEffect, useRef } = React;
                             onSave={saveChildProfile}
                             selectedInterests={selectedInterests}
                             onChangeInterests={setSelectedInterests}
+                            books={books}
+                            onSelectBook={selectBook}
                         />
                     )}
                     </div>
@@ -4737,7 +4739,7 @@ const { useState, useEffect, useRef } = React;
             );
         }
 
-        function SettingsView({ profile, onSave, selectedInterests, onChangeInterests }) {
+        function SettingsView({ profile, onSave, selectedInterests, onChangeInterests, books, onSelectBook }) {
             const [birthDate, setBirthDate] = useState(profile.birthDate || '');
             const [gender, setGender] = useState(profile.gender === '남아' ? 'male' : profile.gender === '여아' ? 'female' : (profile.gender || ''));
             const [booksPerDay, setBooksPerDay] = useState(profile.booksPerDay || 2);
@@ -4762,6 +4764,8 @@ const { useState, useEffect, useRef } = React;
             const [classificationTotal, setClassificationTotal] = useState(0);
             const [classificationPage, setClassificationPage] = useState(1);
             const [taxonomyResidualBooks, setTaxonomyResidualBooks] = useState([]);
+            const [residualSelections, setResidualSelections] = useState({});
+            const [residualBusy, setResidualBusy] = useState('');
             const classificationPageSize = 20;
             const directInterests = selectedInterests.filter(
                 item => !autoTopInterests.some(auto => auto.toLowerCase() === String(item).toLowerCase())
@@ -4871,6 +4875,51 @@ const { useState, useEffect, useRef } = React;
                     setClassificationError(error.message || '분류 결과를 저장하지 못했어요.');
                 } finally {
                     setClassificationBusy('');
+                }
+            };
+
+            const addResidualTheme = (bookId, theme) => {
+                if (!theme) return;
+                setResidualSelections(current => ({
+                    ...current,
+                    [bookId]: [...new Set([...(current[bookId] || []), theme])]
+                }));
+            };
+
+            const removeResidualTheme = (bookId, theme) => {
+                setResidualSelections(current => ({
+                    ...current,
+                    [bookId]: (current[bookId] || []).filter(item => item !== theme)
+                }));
+            };
+
+            const handleResidualReview = async (book, action) => {
+                const mappedThemes = residualSelections[book.book_id] || [];
+                if (action === 'resolved' && !mappedThemes.length) {
+                    setClassificationError('이 책에 적용할 표준 테마를 하나 이상 선택해주세요.');
+                    return;
+                }
+                setResidualBusy(book.book_id);
+                setClassificationError('');
+                try {
+                    const response = await fetch('/api/interest-candidates?mode=classifications', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ scope: 'book', bookId: book.book_id, action, mappedThemes })
+                    });
+                    const data = await response.json();
+                    if (!response.ok || !data.success) throw new Error(data.error || '책별 분류 결과를 저장하지 못했어요.');
+                    setResidualSelections(current => {
+                        const next = { ...current };
+                        delete next[book.book_id];
+                        return next;
+                    });
+                    notify(action === 'resolved' ? '선택한 테마를 이 책에만 적용했습니다.' : '추가 분류 없음으로 처리했습니다.');
+                    await loadClassifications(classificationPage);
+                } catch (error) {
+                    setClassificationError(error.message || '책별 분류 결과를 저장하지 못했어요.');
+                } finally {
+                    setResidualBusy('');
                 }
             };
 
@@ -5124,6 +5173,9 @@ const { useState, useEffect, useRef } = React;
                                         {taxonomyResidualBooks.map(book => {
                                             const additions = Object.entries(book.residual_additions || {})
                                                 .flatMap(([axis, targets]) => (targets || []).map(target => `${axis}: ${target}`));
+                                            const selectedThemes = residualSelections[book.book_id] || [];
+                                            const sourceBook = (books || []).find(item => String(item.id) === String(book.book_id));
+                                            const busy = residualBusy === book.book_id;
                                             return (
                                                 <div className="classification-item taxonomy-residual-item" key={book.book_id}>
                                                     <div>
@@ -5138,7 +5190,48 @@ const { useState, useEffect, useRef } = React;
                                                             {book.reason}
                                                         </div>
                                                     </div>
-                                                    <span className="classification-status">자료 확인 필요</span>
+                                                    <div className="taxonomy-residual-controls">
+                                                        <select
+                                                            value=""
+                                                            disabled={busy}
+                                                            aria-label={`${book.title}에 추가할 테마`}
+                                                            onChange={event => addResidualTheme(book.book_id, event.target.value)}
+                                                        >
+                                                            <option value="">이 책에 추가할 표준 테마 선택</option>
+                                                            {classificationGroups.map(group => (
+                                                                <optgroup label={group.label} key={group.id}>
+                                                                    {group.themes.filter(theme => !selectedThemes.includes(theme)).map(theme => (
+                                                                        <option value={theme} key={theme}>{theme}</option>
+                                                                    ))}
+                                                                </optgroup>
+                                                            ))}
+                                                        </select>
+                                                        {selectedThemes.length > 0 && (
+                                                            <div className="taxonomy-residual-selected">
+                                                                {selectedThemes.map(theme => (
+                                                                    <button type="button" key={theme} disabled={busy} onClick={() => removeResidualTheme(book.book_id, theme)}>
+                                                                        {theme} ×
+                                                                    </button>
+                                                                ))}
+                                                            </div>
+                                                        )}
+                                                        <button
+                                                            className="clay-button clay-button-primary"
+                                                            type="button"
+                                                            disabled={busy || !selectedThemes.length}
+                                                            onClick={() => handleResidualReview(book, 'resolved')}
+                                                        >
+                                                            선택 테마를 이 책에 적용
+                                                        </button>
+                                                        <div className="taxonomy-residual-secondary">
+                                                            <button className="clay-button" type="button" disabled={busy || !sourceBook} onClick={() => sourceBook && onSelectBook(sourceBook)}>
+                                                                책 정보 보기
+                                                            </button>
+                                                            <button className="clay-button classification-exclude-button" type="button" disabled={busy} onClick={() => handleResidualReview(book, 'dismissed')}>
+                                                                추가 분류 없음
+                                                            </button>
+                                                        </div>
+                                                    </div>
                                                 </div>
                                             );
                                         })}
