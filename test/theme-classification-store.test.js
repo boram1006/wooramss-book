@@ -6,8 +6,10 @@ const {
   loadOpenThemeClassifications,
   loadOpenTaxonomyResiduals,
   recordUnclassifiedObservations,
+  removeBookThemes,
   sanitizeThemeSuggestion,
   validateResidualAnalysis,
+  validateResidualReopen,
   validateResidualReview,
   appendBookThemes
 } = require('../lib/theme-classification-store');
@@ -97,6 +99,18 @@ test('책 소개글 분석 입력은 양쪽 공백을 제거해 DB 저장에 쓴
 test('책별 테마 추가는 기존 값을 보존하고 중복만 제거한다', () => {
   assert.equal(appendBookThemes('가족,동물·생명', ['동물·생명', '공감·위로']), '가족,동물·생명,공감·위로');
   assert.deepEqual(appendBookThemes(['가족'], ['공감·위로']), ['가족', '공감·위로']);
+});
+
+test('책별 재검토는 지정한 표준 테마만 제거하고 원본 표현을 보존한다', () => {
+  assert.deepEqual(validateResidualReopen({ bookId: 'book-1', themesToRemove: ['공감·위로'] }).value, {
+    bookId: 'book-1',
+    themesToRemove: ['공감·위로']
+  });
+  assert.match(validateResidualReopen({ bookId: 'book-1', themesToRemove: ['알 수 없음'] }).error, /표준 테마/);
+  assert.equal(
+    removeBookThemes('강박행동,공감,화해,공감·위로', ['공감·위로']),
+    '강박행동,공감,화해'
+  );
 });
 
 test('같은 출처의 동일 미분류 표현은 한 번만 저장 대상으로 모은다', () => {

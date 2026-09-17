@@ -11,9 +11,11 @@ const {
   loadOpenTaxonomyResiduals,
   loadThemeOverrides,
   recordUnclassifiedObservations,
+  removeBookThemes,
   sanitizeThemeSuggestion,
   validateClassification,
   validateResidualAnalysis,
+  validateResidualReopen,
   validateResidualReview,
   appendBookThemes
 } = require('../lib/theme-classification-store');
@@ -173,6 +175,31 @@ module.exports = async (req, res) => {
 
     if (mode === 'classifications' && req.method === 'POST') {
       if (req.body?.scope === 'book') {
+        if (req.body?.action === 'reopen') {
+          const validation = validateResidualReopen(req.body);
+          if (validation.error) return res.status(400).json({ success: false, error: validation.error });
+          const { bookId, themesToRemove } = validation.value;
+          const [{ data: residual, error: residualError }, { data: book, error: bookError }] = await Promise.all([
+            supabase.from('taxonomy_review_residuals_v2').select('book_id,status').eq('book_id', bookId).eq('status', 'resolved').maybeSingle(),
+            supabase.from('books').select('id,themes').eq('id', bookId).single()
+          ]);
+          if (residualError) throw residualError;
+          if (bookError) throw bookError;
+          if (!residual) return res.status(404).json({ success: false, error: '완료된 책별 검토 항목을 찾지 못했어요.' });
+          const nextThemes = removeBookThemes(book.themes, themesToRemove);
+          const { error: updateBookError } = await supabase.from('books').update({ themes: nextThemes }).eq('id', bookId);
+          if (updateBookError) throw updateBookError;
+          const { data: reopened, error: reopenError } = await supabase
+            .from('taxonomy_review_residuals_v2')
+            .update({ status: 'pending', resolved_at: null })
+            .eq('book_id', bookId)
+            .eq('status', 'resolved')
+            .select('*')
+            .single();
+          if (reopenError) throw reopenError;
+          return res.status(200).json({ success: true, item: reopened, removedThemes: themesToRemove, themes: nextThemes });
+        }
+
         if (req.body?.action === 'analyze') {
           const validation = validateResidualAnalysis(req.body);
           if (validation.error) return res.status(400).json({ success: false, error: validation.error });
