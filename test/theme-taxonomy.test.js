@@ -43,6 +43,23 @@ test('책 정보에서 자동 분류하되 목록 밖 값을 만들지 않는다
   assert.ok(themes.every(theme => THEME_CATALOG.includes(theme)));
 });
 
+test('소개글의 사회·경제 갈등과 이사 맥락을 표준 테마로 잡는다', () => {
+  const sparrow = inferThemes({
+    title: '참새의 빨간 양말',
+    description: '가족의 양말 공장이 대형 백화점에 밀려 곤경에 빠지지만 친구의 도움으로 극복하며 사회 문제를 생각한다.'
+  }, 4);
+  assert.equal(sparrow.includes('사회·경제·직업'), true);
+  assert.equal(sparrow.includes('친구·우정'), true);
+
+  const findus = inferThemes({
+    title: '핀두스가 이사를 간대요',
+    description: '할아버지가 잠을 자지 못하자 침대에서 뛰는 걸 멈추든지 이사를 가라고 으름장을 놓는다.'
+  }, 4);
+  assert.equal(findus.includes('갈등·화해'), true);
+  assert.equal(findus.includes('성장·자립'), true);
+  assert.equal(findus.includes('일상생활'), true);
+});
+
 test('사전에 없는 원본 표현과 정규화 값을 찾아낸다', () => {
   assert.deepEqual(
     listUnclassifiedThemes(['친구', '로봇과 기계', '번역', '로봇과 기계']),
