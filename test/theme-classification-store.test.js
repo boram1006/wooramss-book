@@ -68,6 +68,16 @@ test('책 소개글 분석은 충분한 맥락만 받고 표준 테마만 남긴
   );
 });
 
+test('책 소개글 분석 입력은 양쪽 공백을 제거해 DB 저장에 쓴다', () => {
+  const result = validateResidualAnalysis({
+    bookId: ' book-1 ',
+    description: '  친구와 함께 어려움을 해결하고 서로의 마음을 이해하는 이야기입니다.  '
+  });
+  assert.equal(result.value.bookId, 'book-1');
+  assert.equal(result.value.description.startsWith(' '), false);
+  assert.equal(result.value.description.endsWith(' '), false);
+});
+
 test('책별 테마 추가는 기존 값을 보존하고 중복만 제거한다', () => {
   assert.equal(appendBookThemes('가족,동물·생명', ['동물·생명', '공감·위로']), '가족,동물·생명,공감·위로');
   assert.deepEqual(appendBookThemes(['가족'], ['공감·위로']), ['가족', '공감·위로']);

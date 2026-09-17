@@ -174,7 +174,12 @@ module.exports = async (req, res) => {
           if (bookError) throw bookError;
           if (!residual) return res.status(404).json({ success: false, error: '이미 처리되었거나 찾을 수 없는 항목입니다.' });
           const analysis = await analyzeBookDescription(book, description, overrides);
-          return res.status(200).json({ success: true, ...analysis });
+          const { error: saveDescriptionError } = await supabase
+            .from('books')
+            .update({ description })
+            .eq('id', bookId);
+          if (saveDescriptionError) throw saveDescriptionError;
+          return res.status(200).json({ success: true, descriptionSaved: true, ...analysis });
         }
 
         const validation = validateResidualReview(req.body);

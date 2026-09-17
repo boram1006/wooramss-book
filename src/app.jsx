@@ -4912,7 +4912,11 @@ const { useState, useEffect, useRef } = React;
                     const data = await response.json();
                     if (!response.ok || !data.success) throw new Error(data.error || '소개글을 분석하지 못했어요.');
                     setResidualSelections(current => ({ ...current, [book.book_id]: data.themes || [] }));
-                    setResidualAnalyses(current => ({ ...current, [book.book_id]: data.reason || '표준 테마 후보를 제안했어요.' }));
+                    const reason = data.reason || '표준 테마 후보를 제안했어요.';
+                    setResidualAnalyses(current => ({
+                        ...current,
+                        [book.book_id]: data.descriptionSaved ? `소개글을 DB에 저장했어요. ${reason}` : reason
+                    }));
                 } catch (error) {
                     setClassificationError(error.message || '소개글을 분석하지 못했어요.');
                 } finally {
@@ -5251,7 +5255,7 @@ const { useState, useEffect, useRef } = React;
                                                             disabled={busy || description.trim().length < 30}
                                                             onClick={() => handleResidualAnalysis(book)}
                                                         >
-                                                            {busy ? '분석 중...' : '소개글로 테마 제안'}
+                                                            {busy ? '저장·분석 중...' : '소개글 저장하고 테마 제안'}
                                                         </button>
                                                         {analysis && <p className="taxonomy-analysis-reason">{analysis}</p>}
                                                         <select
