@@ -5253,8 +5253,6 @@ const { useState, useEffect, useRef } = React;
                                                     {(item.record_ids || []).length > 0
                                                         ? `관련 책 ${(item.record_ids || []).length}권`
                                                         : `${item.occurrence_count || 1}회 발견`} · 최근 {new Date(item.last_seen_at).toLocaleDateString('ko-KR')}
-                                                    {(item.sources || []).length > 0 && <><br />출처: {(item.sources || []).join(', ')}</>}
-                                                    {(item.record_ids || []).length > 0 && <><br />관련 책 ID: {(item.record_ids || []).slice(0, 3).join(', ')}</>}
                                                 </div>
                                             </div>
                                             <div className="classification-controls">

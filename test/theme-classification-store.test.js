@@ -3,6 +3,7 @@ const assert = require('node:assert/strict');
 const {
   buildThemeOverrides,
   collectUnclassifiedObservations,
+  loadOpenThemeClassifications,
   recordUnclassifiedObservations,
   validateResidualReview,
   appendBookThemes
@@ -25,6 +26,20 @@ test('처리된 분류 행을 연결·제외 오버라이드로 만든다', () =
   assert.equal(overrides.get('콜라주'), null);
   assert.equal(overrides.has('선물'), false);
   assert.equal(overrides.has('바퀴친구'), false);
+});
+
+test('전역 분류 목록에서는 책별 검토 대상으로 넘긴 표현을 제외한다', async () => {
+  const calls = [];
+  const query = {
+    select() { return this; },
+    in() { return this; },
+    or(filter) { calls.push(filter); return this; },
+    order() { return this; },
+    async range() { return { data: [], error: null, count: 0 }; }
+  };
+  const result = await loadOpenThemeClassifications({ from: () => query });
+  assert.equal(calls[0], 'resolution_scope.is.null,resolution_scope.neq.book');
+  assert.equal(result.total, 0);
 });
 
 test('책별 잔여 검토는 표준 테마를 여러 개 적용하거나 추가 없음으로 끝낼 수 있다', () => {

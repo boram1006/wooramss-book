@@ -132,6 +132,21 @@ module.exports = async (req, res) => {
           .select('*')
           .single();
         if (error) throw error;
+
+        const { count: pendingResidualCount, error: pendingResidualError } = await supabase
+          .from('taxonomy_review_residuals_v2')
+          .select('book_id', { count: 'exact', head: true })
+          .eq('status', 'pending');
+        if (pendingResidualError) throw pendingResidualError;
+        if (pendingResidualCount === 0) {
+          const { error: closeDeferredError } = await supabase
+            .from('unclassified_theme_logs')
+            .update({ status: 'resolved_v2', resolved_at: new Date().toISOString() })
+            .eq('status', 'deferred')
+            .eq('resolution_scope', 'book');
+          if (closeDeferredError) throw closeDeferredError;
+        }
+
         return res.status(200).json({ success: true, item: data, mappedThemes });
       }
 
