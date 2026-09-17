@@ -5,6 +5,8 @@ const {
   collectUnclassifiedObservations,
   loadOpenThemeClassifications,
   recordUnclassifiedObservations,
+  sanitizeThemeSuggestion,
+  validateResidualAnalysis,
   validateResidualReview,
   appendBookThemes
 } = require('../lib/theme-classification-store');
@@ -50,10 +52,20 @@ test('책별 잔여 검토는 표준 테마를 여러 개 적용하거나 추가
   }).value, {
     bookId: 'book-1',
     action: 'resolved',
-    mappedThemes: ['동물·생명', '공감·위로']
+    mappedThemes: ['동물·생명', '공감·위로'],
+    description: ''
   });
   assert.deepEqual(validateResidualReview({ bookId: 'book-1', action: 'dismissed' }).value.mappedThemes, []);
   assert.match(validateResidualReview({ bookId: 'book-1', action: 'resolved', mappedThemes: [] }).error, /표준 테마/);
+});
+
+test('책 소개글 분석은 충분한 맥락만 받고 표준 테마만 남긴다', () => {
+  assert.match(validateResidualAnalysis({ bookId: 'book-1', description: '짧음' }).error, /30자/);
+  assert.equal(validateResidualAnalysis({ bookId: 'book-1', description: '난관을 함께 극복하는 친구들의 이야기가 충분히 길게 이어진다.' }).error, undefined);
+  assert.deepEqual(
+    sanitizeThemeSuggestion(['친구·우정', '알 수 없음', '친구·우정', '문제해결', '가족', '일상생활'], 3),
+    ['친구·우정', '문제해결', '가족']
+  );
 });
 
 test('책별 테마 추가는 기존 값을 보존하고 중복만 제거한다', () => {

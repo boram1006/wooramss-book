@@ -4765,6 +4765,8 @@ const { useState, useEffect, useRef } = React;
             const [classificationPage, setClassificationPage] = useState(1);
             const [taxonomyResidualBooks, setTaxonomyResidualBooks] = useState([]);
             const [residualSelections, setResidualSelections] = useState({});
+            const [residualDescriptions, setResidualDescriptions] = useState({});
+            const [residualAnalyses, setResidualAnalyses] = useState({});
             const [residualBusy, setResidualBusy] = useState('');
             const classificationPageSize = 20;
             const directInterests = selectedInterests.filter(
@@ -4893,8 +4895,34 @@ const { useState, useEffect, useRef } = React;
                 }));
             };
 
+            const handleResidualAnalysis = async (book) => {
+                const description = (residualDescriptions[book.book_id] || '').trim();
+                if (description.length < 30) {
+                    setClassificationError('이야기의 맥락을 판단할 수 있게 소개글을 30자 이상 입력해주세요.');
+                    return;
+                }
+                setResidualBusy(book.book_id);
+                setClassificationError('');
+                try {
+                    const response = await fetch('/api/interest-candidates?mode=classifications', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ scope: 'book', bookId: book.book_id, action: 'analyze', description })
+                    });
+                    const data = await response.json();
+                    if (!response.ok || !data.success) throw new Error(data.error || '소개글을 분석하지 못했어요.');
+                    setResidualSelections(current => ({ ...current, [book.book_id]: data.themes || [] }));
+                    setResidualAnalyses(current => ({ ...current, [book.book_id]: data.reason || '표준 테마 후보를 제안했어요.' }));
+                } catch (error) {
+                    setClassificationError(error.message || '소개글을 분석하지 못했어요.');
+                } finally {
+                    setResidualBusy('');
+                }
+            };
+
             const handleResidualReview = async (book, action) => {
                 const mappedThemes = residualSelections[book.book_id] || [];
+                const description = (residualDescriptions[book.book_id] || '').trim();
                 if (action === 'resolved' && !mappedThemes.length) {
                     setClassificationError('이 책에 적용할 표준 테마를 하나 이상 선택해주세요.');
                     return;
@@ -4905,11 +4933,21 @@ const { useState, useEffect, useRef } = React;
                     const response = await fetch('/api/interest-candidates?mode=classifications', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ scope: 'book', bookId: book.book_id, action, mappedThemes })
+                        body: JSON.stringify({ scope: 'book', bookId: book.book_id, action, mappedThemes, description })
                     });
                     const data = await response.json();
                     if (!response.ok || !data.success) throw new Error(data.error || '책별 분류 결과를 저장하지 못했어요.');
                     setResidualSelections(current => {
+                        const next = { ...current };
+                        delete next[book.book_id];
+                        return next;
+                    });
+                    setResidualDescriptions(current => {
+                        const next = { ...current };
+                        delete next[book.book_id];
+                        return next;
+                    });
+                    setResidualAnalyses(current => {
                         const next = { ...current };
                         delete next[book.book_id];
                         return next;
@@ -5164,7 +5202,7 @@ const { useState, useEffect, useRef } = React;
                                         <div>
                                             <h4>책별 최종 확인</h4>
                                             <p className="classification-description">
-                                                소개글이 없거나 책별 맥락이 필요한 항목이에요. 전역 표현 규칙으로 자동 연결하지 않았어요.
+                                                알라딘에 소개글이 없으면 다른 서점의 소개글을 붙여 넣으세요. 31개 표준 테마로 분석한 뒤 확인해 적용할 수 있어요.
                                             </p>
                                         </div>
                                         <span className="classification-count">{taxonomyResidualBooks.length}권</span>
@@ -5174,6 +5212,8 @@ const { useState, useEffect, useRef } = React;
                                             const additions = Object.entries(book.residual_additions || {})
                                                 .flatMap(([axis, targets]) => (targets || []).map(target => `${axis}: ${target}`));
                                             const selectedThemes = residualSelections[book.book_id] || [];
+                                            const description = residualDescriptions[book.book_id] || '';
+                                            const analysis = residualAnalyses[book.book_id] || '';
                                             const sourceBook = (books || []).find(item => String(item.id) === String(book.book_id));
                                             const busy = residualBusy === book.book_id;
                                             return (
@@ -5191,13 +5231,36 @@ const { useState, useEffect, useRef } = React;
                                                         </div>
                                                     </div>
                                                     <div className="taxonomy-residual-controls">
+                                                        <textarea
+                                                            className="taxonomy-description-input"
+                                                            value={description}
+                                                            disabled={busy}
+                                                            maxLength={6000}
+                                                            rows={5}
+                                                            placeholder="알라딘에 소개글이 없으면 예스24·교보문고 등의 책 소개를 붙여 넣으세요. 출처 링크는 넣지 않아도 돼요."
+                                                            aria-label={`${book.title} 책 소개`}
+                                                            onChange={event => {
+                                                                const value = event.target.value;
+                                                                setResidualDescriptions(current => ({ ...current, [book.book_id]: value }));
+                                                                setResidualAnalyses(current => ({ ...current, [book.book_id]: '' }));
+                                                            }}
+                                                        />
+                                                        <button
+                                                            className="clay-button taxonomy-analyze-button"
+                                                            type="button"
+                                                            disabled={busy || description.trim().length < 30}
+                                                            onClick={() => handleResidualAnalysis(book)}
+                                                        >
+                                                            {busy ? '분석 중...' : '소개글로 테마 제안'}
+                                                        </button>
+                                                        {analysis && <p className="taxonomy-analysis-reason">{analysis}</p>}
                                                         <select
                                                             value=""
                                                             disabled={busy}
                                                             aria-label={`${book.title}에 추가할 테마`}
                                                             onChange={event => addResidualTheme(book.book_id, event.target.value)}
                                                         >
-                                                            <option value="">이 책에 추가할 표준 테마 선택</option>
+                                                            <option value="">제안을 수정하거나 테마 직접 추가</option>
                                                             {classificationGroups.map(group => (
                                                                 <optgroup label={group.label} key={group.id}>
                                                                     {group.themes.filter(theme => !selectedThemes.includes(theme)).map(theme => (
@@ -5221,7 +5284,7 @@ const { useState, useEffect, useRef } = React;
                                                             disabled={busy || !selectedThemes.length}
                                                             onClick={() => handleResidualReview(book, 'resolved')}
                                                         >
-                                                            선택 테마를 이 책에 적용
+                                                            확인한 테마 적용
                                                         </button>
                                                         <div className="taxonomy-residual-secondary">
                                                             <button className="clay-button" type="button" disabled={busy || !sourceBook} onClick={() => sourceBook && onSelectBook(sourceBook)}>

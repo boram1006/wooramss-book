@@ -11,11 +11,75 @@ const {
   loadOpenTaxonomyResiduals,
   loadThemeOverrides,
   recordUnclassifiedObservations,
+  sanitizeThemeSuggestion,
   validateClassification,
+  validateResidualAnalysis,
   validateResidualReview,
   appendBookThemes
 } = require('../lib/theme-classification-store');
 const { fetchAllRows } = require('../lib/supabase-pagination');
+
+const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
+
+function extractResponseText(data) {
+  if (typeof data?.output_text === 'string' && data.output_text.trim()) return data.output_text.trim();
+  for (const item of data?.output || []) {
+    for (const content of item?.content || []) {
+      if (content?.type === 'output_text' && typeof content.text === 'string') return content.text.trim();
+    }
+  }
+  return '';
+}
+
+async function analyzeBookDescription(book, description, overrides) {
+  const fallbackThemes = inferThemes({ title: book.title, description }, 4, overrides);
+  const fallback = {
+    themes: fallbackThemes,
+    reason: fallbackThemes.length
+      ? '소개글에서 드러난 핵심 관계·갈등·경험을 표준 테마와 대조했어요.'
+      : '소개글만으로는 확실한 표준 테마를 찾지 못했어요.',
+    source: 'rule'
+  };
+  if (!OPENAI_API_KEY) return fallback;
+
+  const schema = {
+    type: 'object',
+    properties: {
+      themes: { type: 'array', minItems: 1, maxItems: 4, items: { type: 'string', enum: THEME_CATALOG } },
+      reason: { type: 'string' }
+    },
+    required: ['themes', 'reason'],
+    additionalProperties: false
+  };
+  try {
+    const response = await fetch('https://api.openai.com/v1/responses', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${OPENAI_API_KEY}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: process.env.OPENAI_TAXONOMY_MODEL || 'gpt-5-mini',
+        input: [
+          {
+            role: 'developer',
+            content: `어린이책 분류자로서 소개글의 핵심 주제와 이야기 경험만 분류하라. 반드시 제공된 ${THEME_CATALOG.length}개 표준 테마 안에서 1~4개를 고른다. 단순히 등장하는 동물·물건·장소는 제외하고, 관계·갈등·변화·문제해결의 중심성을 우선하라. 이유는 한국어 1~2문장으로 구체적으로 쓴다.`
+          },
+          { role: 'user', content: `제목: ${book.title || '(제목 없음)'}\n기존 테마: ${book.themes || '없음'}\n소개글:\n${description}` }
+        ],
+        reasoning: { effort: 'low' },
+        max_output_tokens: 700,
+        text: { format: { type: 'json_schema', name: 'book_theme_suggestion', strict: true, schema }, verbosity: 'low' }
+      })
+    });
+    const data = await response.json();
+    if (!response.ok) return fallback;
+    const parsed = JSON.parse(extractResponseText(data));
+    const themes = sanitizeThemeSuggestion(parsed.themes);
+    if (!themes.length) return fallback;
+    return { themes, reason: String(parsed.reason || '').trim(), source: 'ai' };
+  } catch (error) {
+    console.warn('[theme-taxonomy] description analysis fallback:', error.message);
+    return fallback;
+  }
+}
 
 function getSupabaseClient() {
   const url = process.env.SUPABASE_URL;
@@ -97,10 +161,26 @@ module.exports = async (req, res) => {
 
     if (mode === 'classifications' && req.method === 'POST') {
       if (req.body?.scope === 'book') {
+        if (req.body?.action === 'analyze') {
+          const validation = validateResidualAnalysis(req.body);
+          if (validation.error) return res.status(400).json({ success: false, error: validation.error });
+          const { bookId, description } = validation.value;
+          const [{ data: residual, error: residualError }, { data: book, error: bookError }, overrides] = await Promise.all([
+            supabase.from('taxonomy_review_residuals_v2').select('book_id').eq('book_id', bookId).eq('status', 'pending').maybeSingle(),
+            supabase.from('books').select('id,title,themes').eq('id', bookId).single(),
+            loadThemeOverrides(supabase)
+          ]);
+          if (residualError) throw residualError;
+          if (bookError) throw bookError;
+          if (!residual) return res.status(404).json({ success: false, error: '이미 처리되었거나 찾을 수 없는 항목입니다.' });
+          const analysis = await analyzeBookDescription(book, description, overrides);
+          return res.status(200).json({ success: true, ...analysis });
+        }
+
         const validation = validateResidualReview(req.body);
         if (validation.error) return res.status(400).json({ success: false, error: validation.error });
 
-        const { bookId, action, mappedThemes } = validation.value;
+        const { bookId, action, mappedThemes, description } = validation.value;
         const { data: residual, error: residualError } = await supabase
           .from('taxonomy_review_residuals_v2')
           .select('book_id,status')
@@ -110,16 +190,19 @@ module.exports = async (req, res) => {
         if (residualError) throw residualError;
         if (!residual) return res.status(404).json({ success: false, error: '이미 처리되었거나 찾을 수 없는 항목입니다.' });
 
-        if (action === 'resolved') {
+        if (action === 'resolved' || description) {
           const { data: book, error: bookError } = await supabase
             .from('books')
-            .select('id,themes')
+            .select('id,themes,description')
             .eq('id', bookId)
             .single();
           if (bookError) throw bookError;
+          const updates = {};
+          if (action === 'resolved') updates.themes = appendBookThemes(book.themes, mappedThemes);
+          if (description) updates.description = description;
           const { error: updateBookError } = await supabase
             .from('books')
-            .update({ themes: appendBookThemes(book.themes, mappedThemes) })
+            .update(updates)
             .eq('id', bookId);
           if (updateBookError) throw updateBookError;
         }
@@ -220,3 +303,4 @@ module.exports = async (req, res) => {
 };
 
 module.exports.calculateAutomaticInterests = calculateAutomaticInterests;
+module.exports.analyzeBookDescription = analyzeBookDescription;
