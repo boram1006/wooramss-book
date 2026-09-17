@@ -149,7 +149,7 @@ module.exports = async (req, res) => {
           page: req.query.page,
           pageSize: req.query.pageSize
         }),
-        loadOpenTaxonomyResiduals(supabase)
+        loadOpenTaxonomyResiduals(supabase, { includeReviewed: req.query.includeReviewed === '1' })
       ]);
       return res.status(200).json({
         success: true,

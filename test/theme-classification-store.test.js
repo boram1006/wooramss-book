@@ -4,6 +4,7 @@ const {
   buildThemeOverrides,
   collectUnclassifiedObservations,
   loadOpenThemeClassifications,
+  loadOpenTaxonomyResiduals,
   recordUnclassifiedObservations,
   sanitizeThemeSuggestion,
   validateResidualAnalysis,
@@ -42,6 +43,21 @@ test('전역 분류 목록에서는 책별 검토 대상으로 넘긴 표현을 
   const result = await loadOpenThemeClassifications({ from: () => query });
   assert.equal(calls[0], 'resolution_scope.is.null,resolution_scope.neq.book');
   assert.equal(result.total, 0);
+});
+
+test('책별 검토 이력은 요청할 때만 처리된 항목까지 포함한다', async () => {
+  const calls = [];
+  const query = {
+    select() { return this; },
+    order() { return this; },
+    eq(field, value) { calls.push([field, value]); return this; },
+    then(resolve) { resolve({ data: [], error: null }); }
+  };
+  await loadOpenTaxonomyResiduals({ from: () => query });
+  assert.deepEqual(calls, [['status', 'pending']]);
+  calls.length = 0;
+  await loadOpenTaxonomyResiduals({ from: () => query }, { includeReviewed: true });
+  assert.deepEqual(calls, []);
 });
 
 test('책별 잔여 검토는 표준 테마를 여러 개 적용하거나 추가 없음으로 끝낼 수 있다', () => {
