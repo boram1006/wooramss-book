@@ -5145,7 +5145,7 @@ const { useState, useEffect, useRef } = React;
                                         사전에 없는 표현을 기존 테마에 연결하거나 추천 분류에서 제외할 수 있어요.
                                     </p>
                                 </div>
-                                <span className="classification-count">미분류 {classificationTotal.toLocaleString('ko-KR')}개</span>
+                                <span className="classification-count">전역 미분류 {classificationTotal.toLocaleString('ko-KR')}개</span>
                             </div>
 
                             {classificationLoading && (
@@ -5154,7 +5154,7 @@ const { useState, useEffect, useRef } = React;
                             {!classificationLoading && classificationError && (
                                 <p className="classification-error">{classificationError}</p>
                             )}
-                            {!classificationLoading && !classificationError && openClassifications.length === 0 && (
+                            {!classificationLoading && !classificationError && openClassifications.length === 0 && taxonomyResidualBooks.length === 0 && (
                                 <p className="classification-empty">지금 검토할 표현이 없어요.</p>
                             )}
 
