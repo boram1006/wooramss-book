@@ -151,10 +151,22 @@ module.exports = async (req, res) => {
         }),
         loadOpenTaxonomyResiduals(supabase, { includeReviewed: req.query.includeReviewed === '1' })
       ]);
+      let reviewedBookThemes = {};
+      if (req.query.includeReviewed === '1' && residualBooks.length) {
+        const { data: residualThemeRows, error: residualThemeError } = await supabase
+          .from('books')
+          .select('id,themes')
+          .in('id', residualBooks.map(book => book.book_id));
+        if (residualThemeError) throw residualThemeError;
+        reviewedBookThemes = Object.fromEntries((residualThemeRows || []).map(book => [String(book.id), book.themes]));
+      }
       return res.status(200).json({
         success: true,
         groups: THEME_GROUPS,
-        residualBooks,
+        residualBooks: residualBooks.map(book => ({
+          ...book,
+          ...(req.query.includeReviewed === '1' ? { current_themes: reviewedBookThemes[String(book.book_id)] || '' } : {})
+        })),
         ...result
       });
     }
